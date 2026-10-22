@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Dual Grid Lab · 16 Tile 工具</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">◩</span>DUAL GRID <b>LAB</b><span class="version">1.8.3</span></div>
+    <span id="file-info" class="file-info">连续绘制底稿 · 512 × 512 px</span>
+    <div class="header-actions">
+      <button id="import-open" class="button primary">导入图集</button>
+      <button id="source-open" class="button" aria-haspopup="dialog" aria-controls="source-panel">切分 / 映射</button>
+      <details class="popover export-menu">
+        <summary>导出 <span aria-hidden="true">⌄</span></summary>
+        <div class="menu">
+          <span class="menu-label">导入素材</span>
+          <button id="atlas-export">AnyRuleD 图集 PNG <small>原生尺寸 · 4×4 · 状态 0–15</small></button>
+          <button id="mapping-export">映射 JSON <small>辅助说明，非 Unity 资产</small></button>
+        </div>
+      </details>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <div class="view-controls">
+        <select id="view" aria-label="预览视角"><option value="ortho">正视角</option><option value="iso">等距 2:1</option></select>
+        <select id="filter" aria-label="纹理过滤" title="生成底稿：硬像素／平滑；导入作品：只改变显示取样，不修改原像素"><option value="nearest" selected>像素 · 硬边</option><option value="bilinear">双线性 · 平滑</option></select>
+        <select id="zoom" aria-label="全部画布缩放"><option value="local" disabled>独立视图</option><option value="0" selected>全部适应 · 1×</option><option value="2">全部 2×</option><option value="3">全部 3×</option><option value="4">全部 4×</option><option value="native">原像素 1:1</option></select>
+        <div class="quick-display" role="group" aria-label="辅助显示快捷开关">
+          <label class="display-toggle" title="切分线 · G"><input id="grid" type="checkbox" checked aria-label="切分线" aria-keyshortcuts="G"><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1"/><path d="M10 3v14M3 10h14"/></svg></span></label>
+          <label class="display-toggle" title="逻辑线 · L"><input id="dual" type="checkbox" aria-label="逻辑线" aria-keyshortcuts="L"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path stroke-dasharray="2 2" d="M6 2v16M14 2v16M2 6h16M2 14h16"/></svg></span></label>
+          <label class="display-toggle" title="角点 · P"><input id="logic" type="checkbox" aria-label="角点" aria-keyshortcuts="P"><span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="15" cy="15" r="2"/></svg></span></label>
+          <label class="display-toggle" title="状态编号 · N"><input id="labels" type="checkbox" aria-label="状态编号" aria-keyshortcuts="N"><span class="number-icon" aria-hidden="true">01</span></label>
+          <label class="display-toggle" title="底稿海面参考 · W"><input id="sea-preview" type="checkbox" checked aria-label="底稿海面参考" aria-keyshortcuts="W"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 7q2-3 4 0t4 0t4 0t4 0M2 13q2-3 4 0t4 0t4 0t4 0"/></svg></span></label>
+          <button id="background" class="display-background" title="画布背景：浅色棋盘 · B" aria-label="画布背景：浅色棋盘，点击切换" aria-keyshortcuts="B"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1"/><path fill="currentColor" stroke="none" d="M3 3h7v7H3zM10 10h7v7h-7z"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div id="workbench" class="workbench" data-guide="expanded" data-side="gallery">
+    <section id="template-panel" class="guide-pane" role="region" aria-labelledby="template-title">
+      <button id="guide-restore" class="pane-rail" aria-label="展开左侧底稿" aria-expanded="false" aria-controls="guide-content" hidden>底稿 ›</button>
+      <div id="guide-content" class="guide-content">
+      <header class="workbench-heading">
+        <h2 id="template-title">绘制底稿</h2>
+        <div class="guide-actions">
+          <button id="compare-guide" class="compare-guide" aria-pressed="false" hidden title="仅切换左侧预览，保留作品与右侧拼接">对照底稿</button>
+          <div class="split-export">
+            <button id="example-export" title="生成示例 PNG：底色＋当前辅助线，海域透明">导出底稿</button>
+            <details class="popover export-menu guide-export-menu">
+              <summary aria-label="选择底稿导出格式" title="更多底稿格式">⌄</summary>
+              <div class="menu">
+                <button id="guide-export">分层 SVG <small>推荐绘制 · 底色／立面／辅助线分层</small></button>
+                <button id="template-export">纯底色 PNG <small>不含辅助线，海域透明</small></button>
+                <button id="overlay-export">辅助线 PNG <small>透明参考层，与纯底色同尺寸</small></button>
+              </div>
+            </details>
+          </div>
+          <button id="guide-toggle" class="icon-button" aria-label="收起左侧底稿" aria-expanded="true" aria-controls="guide-content" title="收起到底稿窄栏">‹</button>
+        </div>
+      </header>
+      <div class="context-bar">
+        <label class="inline-field">画法<select id="guide-style" title="仅改变生成底稿；伪透视使用正视角，不重绘导入作品"><option value="flat">平面</option><option value="pseudo">伪透视</option></select></label>
+        <details class="popover template-settings">
+          <summary>底稿设置 <span aria-hidden="true">⌄</span></summary>
+          <div class="menu">
+            <label class="field">单格尺寸<select id="guide-size"><option id="import-size" value="custom" hidden>按作品尺寸</option><option value="4">4 px</option><option value="8">8 px</option><option value="16">16 px</option><option value="32">32 px</option><option value="64">64 px</option><option value="128" selected>128 px</option><option value="256">256 px</option></select></label>
+            <label class="field color-field">陆地色<input type="color" id="guide-color" value="#b7c6a3" aria-label="底稿填色"></label>
+            <label class="field">对角连接<select id="saddle"><option value="connected" selected>陆地优先连接</option><option value="separate">海水优先连接</option></select></label>
+            <label id="relief-setting" class="field" hidden>前沿厚度 <output id="relief-value" for="relief-depth">18%</output><input id="relief-depth" type="range" min="6" max="28" value="18" step="1" aria-label="伪透视前沿厚度（占单格百分比）"></label>
+          </div>
+        </details>
+        <span id="template-topology" class="context-tag">连续底稿</span>
+      </div>
+      <div class="template-board preview-surface"><canvas id="template-canvas" aria-label="连续16态美术绘制模板"></canvas></div>
+      <div id="template-warning" class="template-warning" role="status" hidden></div>
+      <div class="canvas-caption"><span id="template-legend"><i class="land-key"></i>陆地 <i class="coast-key"></i><span id="edge-caption">海岸</span> <i class="wall-key" hidden></i><span id="wall-caption" hidden>前沿立面</span> <i class="sea-key"></i>海面参考（不导出）</span><span id="template-dimensions" class="dimensions">512 × 512 px · 4×4</span></div>
+      </div>
+    </section>
+    <section id="side-panel" class="side-pane" aria-label="检查与试画">
+      <button id="side-restore" class="pane-rail" aria-label="展开右侧工作区" aria-expanded="false" aria-controls="side-content" hidden>‹ 拼接检查</button>
+      <div id="side-content" class="side-content">
+      <header class="workbench-heading">
+        <div class="tabs" role="tablist" aria-label="右侧工作模式">
+          <button id="gallery-tab" role="tab" aria-selected="true" aria-controls="gallery-panel" class="active">拼接检查 <span>08</span></button>
+          <button id="paint-tab" role="tab" aria-selected="false" aria-controls="paint-panel" tabindex="-1">自由试画</button>
+        </div>
+        <button id="side-toggle" class="text-button" aria-label="隐藏右侧工作区" aria-expanded="true" aria-controls="side-content">隐藏 ›</button>
+      </header>
+    <section id="gallery-panel" role="tabpanel" aria-labelledby="gallery-tab">
+      <div class="context-bar">
+        <span class="coverage">覆盖 <b id="coverage-count">16/16</b></span>
+        <span class="pin-count">钉住 <b id="pin-count">0 / 4</b></span>
+        <div class="batch-actions"><label class="seed-label">种子 <input id="seed" type="number" min="0" max="4294967295" value="42817" aria-label="地形种子"></label><button id="regenerate" class="button" title="仅更新浏览栏，钉住栏保持原来的组">换一组</button></div>
+      </div>
+      <div id="gallery" class="gallery" aria-label="拼接检查分栏"></div>
+    </section>
+    <section id="paint-panel" role="tabpanel" aria-labelledby="paint-tab" hidden>
+      <div class="context-bar paint-heading">
+        <span class="paint-hint">滚轮缩放 · 空格拖动 · Shift / 右键擦除</span>
+        <div class="paint-actions"><button id="paint-pan" class="button" aria-pressed="false">移动</button><button id="paint-mode" class="button" aria-pressed="false">模式：绘制</button><button id="undo" class="button">撤销</button><button id="clear" class="button">清空</button><button id="paint-export" class="button">导出 PNG</button></div>
+      </div>
+      <div class="paint-wrap preview-surface"><canvas id="paint-canvas" aria-label="自由试画地形画布" tabindex="0"></canvas></div>
+    </section>
+      </div>
+    </section>
+    </div>
+    <footer class="statusbar">
+      <span id="inspection">NW 8 · NE 4 · SW 2 · SE 1</span>
+      <button id="unselect" class="text-button" hidden>取消追踪 ×</button>
+      <details class="popover help">
+        <summary aria-label="操作说明">?</summary>
+        <div class="menu">
+          <strong>操作说明</strong>
+          <p>导入 PNG / WebP / JPEG，最大 16 MiB。尺寸自动识别；输入类型、边距及状态顺序在「切分 / 映射」中设置。</p>
+          <p>画布100%／1×是各自适应当前窗口的基准，不是原像素大小；切分辨率后保持相对倍率和位置，不会把4／8px缩成小图。倍率按钮回到1×，回正同时居中。顶部「原像素1:1」才是一个源像素对应一个CSS像素，按钮显示1:1；导出始终保持原生尺寸。</p>
+          <p>像素模式在原生网格生成硬边底稿，固定颜色、alpha仅0或255，支持4／8／16～256px。导出辅助层按像素绘制，页面网格保持1px细线；4／8px省略放不下的编号，细边与厚度按整像素量化。双线性保留平滑路径。导入作品不做去透明或改色；精查真实像素可选「原像素1:1」。</p>
+          <p>顶栏图标一键切换切分线／逻辑线／角点／编号／海面，悬停查看名称；快捷键依次为 G／L／P／N／W，B 切换背景。输入框和弹窗内不触发。</p>
+          <p>左侧「导出底稿」生成示例PNG（含当前辅助线），旁边箭头提供纯底色PNG、辅助线PNG和推荐作画的分层SVG。蓝色海面不导出；在新图层作画，导回前隐藏参考／辅助线层。</p>
+          <p>左侧「画法」选择平面或伪透视：上沿薄边、下沿厚立面，厚度在底稿设置中调节。伪透视自动使用正视角；切等距会恢复平面。只影响生成底稿；导入作品不会被重绘。立面收在格内，不模拟真实高度或悬挑。</p>
+          <p>未导入时左侧显示底稿；导入成功后自动显示作品，标题旁「对照底稿／返回作品」只切换左侧，不替换作品或右侧拼接。对照与底稿导出跟随作品原生单格尺寸；切分无效时明确暂停作品预览，可点击对照继续看底稿。</p>
+          <p>等距仅支持 2:1 地面，不支持高度或越界悬挑。输入类型与预览视角独立。</p>
+          <p>点击图块追踪状态；试画支持 Ctrl / Cmd + Z，最多撤销 40 步。页面关闭不保留数据。所有图像只在本地处理。</p>
+          <p>检查栏点击「下一张」翻页，圆点可直接跳转。钉住会新增一栏并保留当前组，浏览栏自动下一张；最多4个钉住栏，每栏仍可独立翻页。换一组不影响钉住栏；素材与显示设置同步更新，窄屏可横向滚动分栏。</p>
+          <p>左侧底稿常驻，可收为窄栏。右侧拼接检查与自由试画互斥，可整体隐藏；点击窄栏恢复。收起不清空钉住、种子或笔画，至少保留一侧展开。窄屏两侧展开时上下排列。</p>
+          <p>各画布视图独立；顶部缩放用于统一重置全部画布。试画默认左键绘制，点「移动」后左键平移，也可按住空格或使用中键临时平移。拖动不触发选格，翻检查图会自动回正。</p>
+        </div>
+      </details>
+    </footer>
+    <p id="notice" class="notice" role="status" aria-live="polite"></p>
+  </main>
+  <dialog id="source-panel" aria-labelledby="source-title">
+    <div class="dialog-head"><h2 id="source-title">图集设置</h2><button id="source-close" class="text-button" aria-label="关闭图集设置">关闭 ×</button></div>
+    <div class="source-body">
+      <label id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="选择或拖入16 tile图集">
+        <strong>选择或拖入图集</strong><span>PNG / WebP / JPEG · ≤16 MiB</span>
+        <input id="file" type="file" accept="image/png,image/webp,image/jpeg" hidden>
+      </label>
+      <div class="source-actions"><span>图像不会上传；底稿对照在左侧标题栏。</span></div>
+      <label class="field">输入类型<select id="source-geometry"><option value="square">正视角 · 方格图集</option><option value="iso-sheet">等距 · 整张菱形图（2:1）</option><option value="iso-cells">等距 · 菱形逐格矩形排版（2:1）</option></select></label>
+      <label class="field">图集形状<select id="shape"><option value="auto">自动识别 · 16 格</option><option value="4x4">4 × 4</option><option value="8x2">8 × 2</option><option value="2x8">2 × 8</option><option value="16x1">16 × 1</option><option value="1x16">1 × 16</option></select></label>
+      <div class="field-pair">
+        <label class="field">外边距 X / Y<div class="number-pair"><input id="margin-x" aria-label="水平外边距" type="number" min="0" max="512" value="0"><input id="margin-y" aria-label="垂直外边距" type="number" min="0" max="512" value="0"></div></label>
+        <label class="field">格间距 X / Y<div class="number-pair"><input id="gap-x" aria-label="水平格间距" type="number" min="0" max="128" value="0"><input id="gap-y" aria-label="垂直格间距" type="number" min="0" max="128" value="0"></div></label>
+      </div>
+      <div id="slice-info" class="slice-info" role="status">自动识别中</div>
+      <label class="field">状态排版<select id="layout"><option value="continuous">连续绘制 · 16 态共边</option><option value="artist">旧版 · 3×3 主体＋特殊角</option><option value="anyrule">AnyRuleD · 状态 00 → 15</option><option value="legacy">旧 H5 · NW1 / NE2 / SW4 / SE8</option><option value="custom">自定义对应</option></select></label>
+      <details class="slice-details"><summary>切片检查 <b id="tile-size">128 × 128 px</b></summary>
+        <div class="atlas-topline"><span>槽位 → 状态</span><button id="corners" class="text-button" aria-pressed="false">显示四角</button></div>
+        <div id="atlas" class="atlas-grid" aria-label="16张切片及其状态"></div>
+      </details>
+      <p id="mapping-info" class="hint">点选切片追踪状态。</p>
+    </div>
+  </dialog>
+  <script src="core.js"></script>
+  <script src="cases.js"></script>
+  <script src="geometry.js"></script>
+  <script src="relief.js"></script>
+  <script src="pixel-art.js"></script>
+  <script src="pixel-guide.js"></script>
+  <script src="render.js"></script>
+  <script src="sampling.js"></script>
+  <script src="viewport.js"></script>
+  <script src="artwork.js"></script>
+  <script src="exports.js"></script>
+  <script src="imports.js"></script>
+  <script src="paint.js"></script>
+  <script src="template.js"></script>
+  <script src="ui.js"></script>
+  <script src="preview.js"></script>
+  <script src="workspace.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
