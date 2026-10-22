@@ -8,10 +8,10 @@
     const selected = pane => pane.cases[pane.index];
     function update(pane, resetView = false) {
       const map = selected(pane), prefix = pane.pinned ? `钉住栏 ${pane.id}` : "浏览栏";
+      if (pane.canvas.map && pane.canvas.map !== map) app.clearSelection(pane.canvas);
       pane.canvas.map = map;
-      pane.card.querySelector("h2").textContent = map.title;
-      pane.card.querySelector(".pane-kind").textContent = pane.pinned ? "PINNED" : "BROWSE";
       pane.card.querySelector(".case-index").textContent = `${String(pane.index + 1).padStart(2, "0")} / ${String(pane.cases.length).padStart(2, "0")}`;
+      pane.card.querySelector(".case-index").title = map.title;
       pane.card.querySelector(".case-targets").textContent = map.description;
       pane.card.querySelector(".case-seed").textContent = `${map.width}×${map.height} · ${pane.seed}`;
       pane.canvas.setAttribute("aria-label", `${prefix}：${map.title}`);
@@ -30,12 +30,8 @@
     }
     function sync() {
       const count = panes.length - 1;
-      $("pin-count").textContent = `${count} / 4`;
       panes[0].card.querySelector(".pin-case").disabled = count >= 4;
       panes[0].card.querySelector(".pin-case").title = count >= 4 ? "已钉住 4 个；先取消一个" : "钉住当前模板并继续浏览";
-      panes[0].coverage = Lab.coverage(panes[0].cases).filter(Boolean).length;
-      $("coverage-count").textContent = `${panes[0].coverage}/16`;
-      $("coverage-count").title = "当前浏览组的四角状态覆盖，不是正确性评分";
       host.dataset.panes = panes.length;
     }
     function pin(pane) {
@@ -62,8 +58,9 @@
       const pane = { id: ++sequence, seed, cases, index, pinned };
       const card = pane.card = document.createElement("article");
       card.className = `check-pane${pinned ? " pinned" : ""}`;
-      card.innerHTML = '<header class="pane-head"><div><span class="pane-kind"></span><h2></h2></div><span class="case-index"></span><button class="pin-case icon-button"></button></header><div class="check-surface preview-surface"></div><div class="case-targets"></div><div class="case-navigation"><button class="previous-case icon-button" title="上一张" aria-label="上一张检查模板">←</button><div class="case-pagination" role="group" aria-label="检查模板页码"></div><button class="next-case"><span>下一张</span><b aria-hidden="true">→</b></button></div><footer class="pane-footer"><span class="case-seed"></span><button class="text-button export-case">导出 PNG ↗</button></footer>';
+      card.innerHTML = '<header class="pane-head"><button class="pin-case icon-button"></button></header><div class="check-surface preview-surface"></div><div class="case-targets"></div><div class="case-navigation"><button class="previous-case icon-button" title="上一张" aria-label="上一张检查模板">←</button><div class="case-pagination" role="group" aria-label="检查模板页码"></div><button class="next-case"><span>下一张</span><b aria-hidden="true">→</b></button></div><footer class="pane-footer"><span class="case-meta"><span class="case-index"></span><span class="case-seed"></span></span><button class="text-button export-case">导出 PNG ↗</button></footer>';
       const pinButton = card.querySelector(".pin-case");
+      if (!pinned) card.querySelector(".pane-head").insertBefore($("gallery-controls"), pinButton);
       pinButton.innerHTML = pinIcon;
       pinButton.setAttribute("aria-label", pinned ? "取消钉住此栏" : "钉住当前模板");
       pinButton.setAttribute("aria-pressed", String(pinned));
@@ -72,12 +69,7 @@
       const canvas = pane.canvas = Lab.canvas(1, 1);
       card.querySelector(".check-surface").append(canvas);
       Lab.bindViewport(canvas, { label: pinned ? "钉住检查图" : "拼接检查" });
-      canvas.addEventListener("pointermove", event => app.inspect(event, canvas, selected(pane)));
-      canvas.addEventListener("click", event => {
-        if (!state.valid) return;
-        const hit = Lab.hit(event, canvas, selected(pane));
-        if (hit.inside) app.select(Lab.mask(selected(pane), hit.x, hit.y));
-      });
+      app.bindSelection(canvas, () => selected(pane), () => app.sceneValid());
       cases.forEach((map, index) => {
         const dot = document.createElement("button");
         dot.className = "page-dot";
@@ -102,13 +94,23 @@
       update(pane);
       return pane;
     }
-    function regenerate() {
-      const raw = $("seed").value, input = Number(raw);
-      if (!raw.trim() || !Number.isInteger(input) || input < 0 || input > 4294967295) {
-        app.notify("种子须为 0–4294967295 的整数。");
-        return;
+    function regenerate(randomize) {
+      const pane = panes[0];
+      let seed;
+      if (randomize) {
+        const value = new Uint32Array(1);
+        do {
+          globalThis.crypto.getRandomValues(value);
+          seed = value[0];
+        } while (seed === pane.seed);
+      } else {
+        const raw = $("seed").value;
+        seed = Number(raw);
+        if (!raw.trim() || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) {
+          app.notify("种子须为 0–4294967295 的整数。");
+          return;
+        }
       }
-      const pane = panes[0], seed = input === pane.seed ? (input + 1) >>> 0 : input;
       $("seed").value = seed;
       pane.seed = seed;
       pane.cases = Lab.makeChecks(seed);
@@ -118,10 +120,10 @@
     }
     app.drawPreview = function () {
       const hidden = $("gallery-panel").hidden;
-      $("coverage-count").textContent = state.valid ? `${panes[0].coverage}/16` : "—/16";
+      const valid = app.sceneValid();
       panes.forEach(pane => {
-        pane.card.querySelector(".export-case").disabled = !state.valid;
-        if (!state.valid) {
+        pane.card.querySelector(".export-case").disabled = !valid;
+        if (!valid) {
           pane.canvas.width = pane.canvas.height = 1;
           pane.canvas.style.width = pane.canvas.style.height = "1px";
           pane.canvas.labViewport.update();
@@ -130,13 +132,37 @@
         }
         pane.card.classList.remove("invalid");
         if (hidden) return;
-        Lab.renderMap(pane.canvas, selected(pane), state.flatTiles, app.options());
+        app.drawScene(pane.canvas, selected(pane));
         Lab.sizePreview(pane.canvas, Number($("zoom").value));
       });
     };
-    $("regenerate").addEventListener("click", regenerate);
-    $("seed").addEventListener("keydown", event => { if (event.key === "Enter") regenerate(); });
+    $("regenerate").addEventListener("click", () => regenerate(true));
+    $("seed").addEventListener("keydown", event => { if (event.key === "Enter") regenerate(false); });
     add(state.seed, Lab.makeChecks(state.seed), 0, false);
+    app.showFloorCase = function () {
+      const pane = panes[0];
+      pane.index = pane.cases.length - 1;
+      update(pane, true);
+    };
+    app.previewState = {
+      capture: () => panes.map(pane => ({ seed: pane.seed, index: pane.index,
+        view: pane.canvas.labViewport.snapshot() })),
+      restore(snapshots) {
+        // Keep the shared seed controls connected while replacing their owning browse pane.
+        host.before($("gallery-controls"));
+        panes.splice(0).forEach(pane => {
+          observer.unobserve(pane.canvas.parentElement);
+          pane.canvas.labViewport.dispose();
+          pane.card.remove();
+        });
+        sequence = 0;
+        snapshots.forEach((snapshot, index) => {
+          const pane = add(snapshot.seed, Lab.makeChecks(snapshot.seed), snapshot.index, index > 0);
+          pane.canvas.labViewport.restore(snapshot.view);
+        });
+        sync();
+      }
+    };
     sync();
   };
 })(globalThis.DualGridLab);

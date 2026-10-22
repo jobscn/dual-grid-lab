@@ -1,0 +1,95 @@
+{
+  "format": "dual-grid-lab-layered-floor",
+  "version": 1,
+  "cellPixels": 16,
+  "cornerConvention": "NW8-NE4-SW2-SE1-v1",
+  "drawingLayout": [
+    5,
+    11,
+    3,
+    2,
+    7,
+    15,
+    14,
+    9,
+    12,
+    13,
+    10,
+    4,
+    1,
+    6,
+    8,
+    0
+  ],
+  "pluginLayout": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "pureSoilAtlasCount": 1,
+  "requiredAtlasCount": 2,
+  "optionalAtlasCount": 1,
+  "minimumVariantCountPerLayer": 1,
+  "layers": [
+    {
+      "id": "terrain",
+      "name": "泥土地形",
+      "required": true,
+      "order": 1,
+      "rule": "地形四角",
+      "note": "填充内部与边缘；完整地板必需。",
+      "states": 16,
+      "transparentStates": [
+        0
+      ]
+    },
+    {
+      "id": "grass",
+      "name": "草皮覆盖",
+      "required": true,
+      "order": 2,
+      "rule": "地形四角 × 独立覆盖区",
+      "note": "只画透明草皮；00／15留空；不画泥土。",
+      "states": 16,
+      "transparentStates": [
+        0,
+        15
+      ]
+    },
+    {
+      "id": "wall",
+      "name": "背景墙",
+      "required": false,
+      "order": 0,
+      "rule": "独立墙体四角",
+      "note": "洞穴／室内可选；不改变前景占用。",
+      "states": 16,
+      "transparentStates": [
+        0
+      ]
+    }
+  ],
+  "composition": [
+    "wall",
+    "terrain",
+    "grass"
+  ],
+  "grassShape": "terrain four-corner mask",
+  "grassPresence": "separate coverage mask; pixel-hard geometric clipping in this tool",
+  "walls": "independent four-corner occupancy, same cell size; no native 32px wall overscan",
+  "integration": "Artist reference only; not a Unity asset or generated AnyRuleD rule set.",
+  "reference": "Original side-view teaching artwork; not bundled Terraria artwork."
+}

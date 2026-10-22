@@ -58,6 +58,13 @@
       showSide(mode);
       $(`${mode}-tab`).focus();
     });
+    app.workspaceState = {
+      capture: () => ({ guideOpen, side, previousSide }),
+      restore(snapshot) {
+        ({ guideOpen, side, previousSide } = snapshot);
+        apply();
+      }
+    };
     apply();
   };
 })(globalThis.DualGridLab);

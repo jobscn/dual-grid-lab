@@ -4,7 +4,7 @@
   const state = {
     source: Lab.makeDemo(), fileName: "连续绘制底稿", isDemo: true,
     slice: null, tiles: null, flatTiles: null, mapping: Lab.layouts.continuous.slice(),
-    selected: null, corners: false, background: 0, valid: false, compareGuide: false,
+    trackedMask: null, corners: false, background: 0, valid: false, compareGuide: false,
     seed: 42817,
     paint: Lab.map(32, 22, "自由试画", "FREE PAINT", ""), frame: 0
   };
@@ -15,34 +15,22 @@
   const app = { $, state };
   app.notify = text => $("notice").textContent = text;
   app.options = () => ({ grid: $("grid").checked, dual: $("dual").checked, logic: $("logic").checked,
-    selected: state.selected, view: $("view").value, filter: $("filter").value,
-    geometry: state.slice ? state.slice.geometry : "square", nativeTiles: state.tiles });
-  app.select = mask => {
-    state.selected = state.selected === mask ? null : mask;
-    $("unselect").hidden = state.selected === null;
-    $("mapping-info").textContent = state.selected === null ?
-      "点选切片追踪状态。" :
-      `正在追踪状态 ${String(mask).padStart(2, "0")}（${Lab.stateLabel(mask)}）；橙框标记其全部使用位置。`;
-    document.querySelectorAll(".tile-button").forEach(button =>
-      button.classList.toggle("active", Number(button.dataset.state) === state.selected));
-    app.schedule();
-  };
-  app.inspect = function (event, canvas, map) {
-    if (!state.valid) return;
-    const hit = Lab.hit(event, canvas, map);
-    if (!hit.inside) return;
-    const mask = Lab.mask(map, hit.x, hit.y);
-    const slot = state.mapping.indexOf(mask), rect = Lab.sourceRect(state.slice, slot);
-    const corners = [8, 4, 2, 1].map(bit => mask & bit ? 1 : 0);
-    $("inspection").textContent = `STATE ${String(mask).padStart(2, "0")} / ${mask.toString(2).padStart(4, "0")} · ${Lab.stateLabel(mask)} | tile (${hit.x}, ${hit.y}) | NW/NE/SW/SE ${corners.join("/")} | 原图 (${rect.x}, ${rect.y}) ${rect.width}×${rect.height}px`;
-  };
+    selected: state.trackedMask, view: $("view").value, filter: $("filter").value,
+    geometry: state.slice ? state.slice.geometry : "square", nativeTiles: state.tiles,
+    variantPacks: state.variantMode === "mixed" ? state.variantPacks : null, variantSeed: state.variantSeed });
   app.exportMap = function (map, name) {
-    if (!state.valid) return;
+    if (!app.sceneValid()) return;
     const canvas = Lab.canvas(1, 1);
-    Lab.renderMap(canvas, map, state.flatTiles, { ...app.options(), size: state.slice.size,
+    const size = app.floor.active ? app.floor.unitSize : state.slice.size;
+    const projection = Lab.projection(map.width, map.height, size, $("view").value);
+    if (projection.width * projection.height > 16777216) {
+      app.notify("原生场景导出超过16777216像素，请使用较小模板或原生图集尺寸；不会自动缩小作品。");
+      return;
+    }
+    app.drawScene(canvas, map, { size,
       grid: false, dual: false, logic: false, selected: null });
     Lab.downloadCanvas(canvas, name, app.notify);
-    app.notify("已请求导出透明 PNG，未包含检查网格、高亮或页面背景。");
+    app.notify("已请求导出当前预览PNG，遵循图层显隐与固定层预览；未包含检查网格、高亮或页面背景。");
   };
   function atlas() {
     const host = $("atlas");
@@ -54,7 +42,7 @@
       const button = document.createElement("button");
       button.className = "tile-button";
       button.dataset.state = mask;
-      button.classList.toggle("active", state.selected === mask);
+      button.classList.toggle("active", state.trackedMask === mask);
       button.title = `原图第 ${slot + 1} 格 → 状态 ${mask}：${Lab.stateLabel(mask)}`;
       button.setAttribute("aria-label", button.title);
       const canvas = Lab.canvas(state.slice.tileWidth, state.slice.tileHeight);
@@ -97,31 +85,31 @@
       surface.classList.toggle("plain", state.background === 2);
     });
     app.drawPreview();
+    $("paint-export").disabled = !app.sceneValid();
     const canvas = $("paint-canvas");
-    if (!state.valid) {
+    if (!app.sceneValid()) {
       canvas.width = canvas.height = 1;
       canvas.style.width = canvas.style.height = "1px";
       canvas.labViewport.update();
+      app.refreshSelection();
       return;
     }
     if (!$("paint-panel").hidden) {
-      Lab.renderMap(canvas, state.paint, state.flatTiles, app.options());
+      app.drawScene(canvas, app.basePaint());
       Lab.sizePreview(canvas, Number($("zoom").value));
     }
+    app.refreshSelection();
   }
   app.schedule = function () {
     if (!state.frame) state.frame = requestAnimationFrame(draw);
+    app.session?.queue();
   };
   app.rebuild = function () {
-    $("file-info").textContent = `${state.fileName} · ${state.source.width} × ${state.source.height} px${state.isDemo ? " · 示例素材" : ""}`;
     try {
-      state.slice = Lab.infer(state.source.width, state.source.height, $("shape").value,
-        Number($("margin-x").value), Number($("margin-y").value),
-        Number($("gap-x").value), Number($("gap-y").value), $("source-geometry").value);
+      state.slice = app.inferSource(state.source);
       if (["margin-x", "margin-y", "gap-x", "gap-y"].some(id => $(id).value.trim() === ""))
         throw new Error("请填写边距和间距，不能留空。");
-      state.tiles = Lab.slice(state.source, state.slice, state.mapping, state.isDemo && $("filter").value === "nearest");
-      state.flatTiles = Lab.flattenTiles(state.tiles, state.slice.geometry, $("filter").value);
+      app.compileVariants();
       state.valid = true;
       const slice = state.slice;
       $("slice-info").textContent = `${slice.cols}×${slice.rows} · 16 格 · 单格 ${slice.tileWidth}×${slice.tileHeight} px · ${slice.geometry === "iso-sheet" ? "菱形逻辑行列" : "从上往下"}`;
@@ -133,14 +121,16 @@
       $("slice-info").textContent = error.message;
       $("slice-info").classList.add("error");
       $("tile-size").textContent = "切分待修正";
-      $("coverage-count").innerHTML = `—<span>/16</span>`;
-      $("inspection").textContent = "切分无效，预览已暂停；修正参数后自动恢复。";
       $("source-open").classList.add("error");
     }
     app.syncGuideSize();
-    ["atlas-export", "mapping-export", "paint-export"].forEach(id => $(id).disabled = !state.valid);
+    app.saveFloorLayer();
+    app.syncFloorUi();
+    ["atlas-export", "mapping-export"].forEach(id => $(id).disabled = !state.valid);
+    $("paint-export").disabled = !app.sceneValid();
     $("gallery").setAttribute("aria-label", state.valid ? "拼接检查分栏" : "切分无效，预览暂停");
     atlas();
+    app.syncPaintHistory?.();
     app.schedule();
   };
   ["shape", "margin-x", "margin-y", "gap-x", "gap-y"].forEach(id =>
@@ -164,9 +154,7 @@
   });
   $("filter").addEventListener("change", () => {
     if (state.isDemo) { app.useDemo(false); return; }
-    if (state.valid) state.flatTiles = Lab.flattenTiles(state.tiles, state.slice.geometry, $("filter").value);
-    document.querySelectorAll("#atlas canvas").forEach(canvas => Lab.setFilter(canvas, $("filter").value));
-    app.schedule();
+    app.rebuild();
   });
   $("background").addEventListener("click", () => {
     state.background = (state.background + 1) % 3;
@@ -175,19 +163,26 @@
     $("background").setAttribute("aria-label", `画布背景：${name}，点击切换`);
     app.schedule();
   });
-  $("unselect").addEventListener("click", () => app.select(state.selected));
+  $("unselect").addEventListener("click", () => app.select(state.trackedMask));
   $("atlas-export").addEventListener("click", () => {
-    if (state.valid) Lab.exportAtlas(state.tiles, "dual-grid", app.notify);
+    if (state.valid) Lab.exportAtlas(state.tiles,
+      `${app.floor.active ? `floor-${app.floor.id}` : "dual-grid"}-variant-${state.activeVariant + 1}`, app.notify);
   });
   $("mapping-export").addEventListener("click", () => {
-    if (state.valid) Lab.exportMapping(state.source, state.slice, state.mapping, $("layout").value, state.fileName);
+    if (state.valid) Lab.exportMapping(state.source, state.slice, state.mapping, $("layout").value, state.fileName,
+      app.floor.active ? { ...Lab.floorPlan(app.floor.unitSize, app.floor.roles), currentLayer: app.floor.id } : null);
   });
   window.addEventListener("resize", app.schedule);
+  Lab.bindSelectionTools(app);
   Lab.bindTemplate(app);
+  Lab.bindVariants(app);
+  Lab.bindFloorState(app);
+  Lab.bindFloorUi(app);
   Lab.bindImport(app);
   Lab.bindPaint(app);
   Lab.bindUi(app);
   Lab.bindPreview(app);
   Lab.bindWorkspace(app);
   app.rebuild();
+  Lab.bindSession(app);
 })(globalThis.DualGridLab);

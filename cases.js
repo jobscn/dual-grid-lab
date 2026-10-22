@@ -43,8 +43,11 @@
       }
     return map;
   }
+  function sideView() {
+    return Lab.makeFloorSample();
+  }
   Lab.makeChecks = function (seed) {
     const batch = Lab.makeBatch(seed);
-    return [overview(), ...batch.slice(0, 5), edgePairs(), batch[5]];
+    return [overview(), ...batch.slice(0, 5), edgePairs(), batch[5], sideView()];
   };
 })(globalThis.DualGridLab);

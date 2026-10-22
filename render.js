@@ -104,17 +104,20 @@
     const ctx = Lab.prepareCanvas(canvas, map, size, view), filter = options.filter || "nearest";
     Lab.setFilter(canvas, filter);
     const directIso = view === "iso" && options.nativeTiles && options.geometry !== "square";
-    const prepared = tiles.map((tile, mask) => view === "iso" ?
-      Lab.sampledTile(directIso ? options.nativeTiles[mask] : tile, size * 2, size, filter,
-        directIso ? "resize" : "diamond") : Lab.sampledTile(tile, size, size, filter));
+    const packs = options.variantPacks?.length > 1 ? options.variantPacks :
+      [{ flatTiles: tiles, tiles: options.nativeTiles }];
+    const prepared = packs.map(pack => pack.flatTiles.map((tile, mask) => view === "iso" ?
+      Lab.sampledTile(directIso ? pack.tiles[mask] : tile, size * 2, size, filter,
+        directIso ? "resize" : "diamond") : Lab.sampledTile(tile, size, size, filter)));
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < map.width; x++) {
         const mask = Lab.mask(map, x, y);
+        const variant = Lab.variantIndex(x, y, prepared.length, options.variantSeed);
         ctx.save();
         ctx.resetTransform();
-        if (view === "iso") ctx.drawImage(prepared[mask], (x - y + map.height - 1) * size,
+        if (view === "iso") ctx.drawImage(prepared[variant][mask], (x - y + map.height - 1) * size,
           (x + y) * size / 2);
-        else ctx.drawImage(prepared[mask], x * size, y * size);
+        else ctx.drawImage(prepared[variant][mask], x * size, y * size);
         ctx.restore();
         if (options.selected === mask) {
           ctx.fillStyle = "#ed5c2928";
@@ -146,7 +149,8 @@
       canvas.style.height = `${canvas.height * scale}px`;
     }
   };
-  Lab.hit = function (event, canvas, map) {
+  // Selection follows the infinite grid; painting still uses the finite map below.
+  Lab.hitGrid = function (event, canvas) {
     const rect = canvas.getBoundingClientRect(), view = canvas.labView;
     if (!view || !rect.width || !rect.height) return { inside: false };
     if (canvas.labViewport) {
@@ -157,11 +161,16 @@
     const point = Lab.inversePoint((event.clientX - rect.left) / rect.width * canvas.width,
       (event.clientY - rect.top) / rect.height * canvas.height, view.projection);
     const x = point.x / view.size, y = point.y / view.size;
-    const inside = x >= 0 && y >= 0 && x <= map.width && y <= map.height;
-    return { inside,
-      x: Math.min(map.width - 1, Math.max(0, Math.floor(x))),
-      y: Math.min(map.height - 1, Math.max(0, Math.floor(y))),
-      sampleX: Math.min(map.width, Math.max(0, Math.round(x))),
-      sampleY: Math.min(map.height, Math.max(0, Math.round(y))) };
+    return { inside: true, gridX: x, gridY: y,
+      x: Math.floor(x), y: Math.floor(y), sampleX: Math.round(x), sampleY: Math.round(y) };
+  };
+  Lab.hit = function (event, canvas, map) {
+    const point = Lab.hitGrid(event, canvas);
+    if (!point.inside) return point;
+    return { inside: point.gridX >= 0 && point.gridY >= 0 && point.gridX <= map.width && point.gridY <= map.height,
+      x: Math.min(map.width - 1, Math.max(0, point.x)),
+      y: Math.min(map.height - 1, Math.max(0, point.y)),
+      sampleX: Math.min(map.width, Math.max(0, point.sampleX)),
+      sampleY: Math.min(map.height, Math.max(0, point.sampleY)) };
   };
 })(globalThis.DualGridLab);

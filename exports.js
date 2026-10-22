@@ -21,12 +21,13 @@
       ctx.drawImage(tiles[state], state % 4 * width, Math.floor(state / 4) * height);
     Lab.downloadCanvas(canvas, `${name}-anyruled-4x4.png`, notify);
   };
-  Lab.exportMapping = function (source, slice, mapping, layout, fileName) {
+  Lab.exportMapping = function (source, slice, mapping, layout, fileName, layerContext = null) {
     const data = {
       format: "dual-grid-lab-mapping", version: 2,
       cornerConvention: Lab.convention, rowsFromTop: true,
       source: { name: fileName, width: source.width, height: source.height },
       layout, slice,
+      ...(layerContext ? { layerContext } : {}),
       slots: mapping.map((state, slot) => ({
         sourceSlot: slot, state, label: Lab.stateLabel(state),
         gridPosition: { x: slot % slice.cols, y: Math.floor(slot / slice.cols) },
@@ -37,6 +38,7 @@
         geometry: slice.geometry === "square" ? "square" : "iso-cells" },
       note: "Auxiliary description only. Not a native Unity TileLayoutTemplate; no GUIDs or rule assets are generated."
     };
-    Lab.download(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "dual-grid-mapping.json");
+    Lab.download(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      layerContext ? `floor-${layerContext.currentLayer}-mapping.json` : "dual-grid-mapping.json");
   };
 })(globalThis.DualGridLab);

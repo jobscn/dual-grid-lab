@@ -9,24 +9,37 @@
 </head>
 <body>
   <header class="masthead">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">◩</span>DUAL GRID <b>LAB</b><span class="version">1.8.3</span></div>
-    <span id="file-info" class="file-info">连续绘制底稿 · 512 × 512 px</span>
-    <div class="header-actions">
-      <button id="import-open" class="button primary">导入图集</button>
-      <button id="source-open" class="button" aria-haspopup="dialog" aria-controls="source-panel">切分 / 映射</button>
-      <details class="popover export-menu">
-        <summary>导出 <span aria-hidden="true">⌄</span></summary>
+    <div class="header-start">
+      <details id="session-menu" class="popover session-menu export-menu">
+        <summary>文件 <span aria-hidden="true">⌄</span></summary>
         <div class="menu">
-          <span class="menu-label">导入素材</span>
-          <button id="atlas-export">AnyRuleD 图集 PNG <small>原生尺寸 · 4×4 · 状态 0–15</small></button>
-          <button id="mapping-export">映射 JSON <small>辅助说明，非 Unity 资产</small></button>
+          <div id="floor-controls" hidden>
+            <button id="floor-package" type="button">导出全部图层<small>绘制包 ZIP · 所有图集、变体与图层清单</small></button>
+          </div>
+          <span class="menu-label">页面备份</span>
+          <button id="session-export" type="button">导出备份<small>素材、图层、笔画与浏览位置</small></button>
+          <button id="session-import" type="button">载入备份<small>载入前自动下载当前状态备份</small></button>
+          <button id="session-save" type="button">立即保存<small>页面会自动保存，也可在这里手动重试</small></button>
+          <p id="session-detail">正在检查上次的工作状态…</p>
         </div>
       </details>
+      <input id="session-file" type="file" accept=".json,application/json" hidden>
+      <select id="workflow" class="workflow-select" aria-label="绘制流程"><option value="single">单层图集</option><option value="floor">分层模板</option></select>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">◩</span>DUAL GRID <b>LAB</b><span class="version">2.0.0</span></div>
     </div>
-  </header>
-  <main>
-    <div class="toolbar">
+    <div class="header-actions">
+      <div id="variant-controls" class="variant-controls" role="group" aria-label="地形变体" hidden>
+        <select id="variant-source" aria-label="左侧当前变体" title="左侧查看此变体；固定模式的右侧也使用此变体"></select>
+        <select id="variant-mode" aria-label="变体显示方式"><option value="mixed">稳定混用</option><option value="fixed">固定当前</option></select>
+        <button id="variant-seed" class="text-button" aria-label="更换变体纹理种子">换纹理 ↻</button>
+        <button id="variant-remove" class="text-button" aria-label="移除当前变体" title="仅从当前浏览器移除">×</button>
+      </div>
       <div class="view-controls">
+        <div class="pick-tools" role="group" aria-label="画布选取对象">
+          <span>选取</span>
+          <button id="pick-render" aria-pressed="true" title="单击锁定一个渲染格；拖动仍平移">渲染格</button>
+          <button id="pick-logic" aria-pressed="false" title="单击锁定逻辑格，并查看周围4个渲染格">逻辑格</button>
+        </div>
         <select id="view" aria-label="预览视角"><option value="ortho">正视角</option><option value="iso">等距 2:1</option></select>
         <select id="filter" aria-label="纹理过滤" title="生成底稿：硬像素／平滑；导入作品：只改变显示取样，不修改原像素"><option value="nearest" selected>像素 · 硬边</option><option value="bilinear">双线性 · 平滑</option></select>
         <select id="zoom" aria-label="全部画布缩放"><option value="local" disabled>独立视图</option><option value="0" selected>全部适应 · 1×</option><option value="2">全部 2×</option><option value="3">全部 3×</option><option value="4">全部 4×</option><option value="native">原像素 1:1</option></select>
@@ -37,9 +50,49 @@
           <label class="display-toggle" title="状态编号 · N"><input id="labels" type="checkbox" aria-label="状态编号" aria-keyshortcuts="N"><span class="number-icon" aria-hidden="true">01</span></label>
           <label class="display-toggle" title="底稿海面参考 · W"><input id="sea-preview" type="checkbox" checked aria-label="底稿海面参考" aria-keyshortcuts="W"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 7q2-3 4 0t4 0t4 0t4 0M2 13q2-3 4 0t4 0t4 0t4 0"/></svg></span></label>
           <button id="background" class="display-background" title="画布背景：浅色棋盘 · B" aria-label="画布背景：浅色棋盘，点击切换" aria-keyshortcuts="B"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1"/><path fill="currentColor" stroke="none" d="M3 3h7v7H3zM10 10h7v7h-7z"/></svg></button>
+          <button id="link-selection" class="display-background" type="button" aria-label="跨画布关联选格" aria-pressed="false" title="关联选格：渲染格匹配同层状态；逻辑格匹配中心值及周围四格"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 12 4-4M6.5 10.5 5 12a3 3 0 0 0 4.2 4.2l2.5-2.5a3 3 0 0 0 0-4.2M13.5 9.5 15 8a3 3 0 0 0-4.2-4.2L8.3 6.3a3 3 0 0 0 0 4.2"/></svg></button>
         </div>
       </div>
     </div>
+    <span id="session-indicator" class="save-status" data-state="loading" role="status" aria-live="polite" title="页面自动保存；备份与恢复在文件菜单中">正在恢复</span>
+  </header>
+  <main>
+    <div id="editor-layout" class="editor-layout" data-floor="false">
+    <aside id="floor-layers" class="floor-layers" aria-label="分层素材工作区" hidden>
+      <div class="floor-layers-heading">
+        <strong>图层堆栈 <span>上 ↓ 下</span></strong>
+        <p>拖拽手柄排序 · 展开后点击名称改名 · 可拖入图集</p>
+        <span id="floor-layer-count">3 层 · 上方覆盖下方</span>
+        <div class="floor-layer-fold-tools" role="group" aria-label="图层卡片展开与收起">
+          <button id="floor-expand-all" type="button" aria-label="全部展开图层" title="全部展开图层" aria-controls="floor-layer-cards"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 7 4-4 4 4M6 13l4 4 4-4M4 10h12"/></svg></button>
+          <button id="floor-collapse-all" type="button" aria-label="全部收起图层" title="全部收起图层" aria-controls="floor-layer-cards"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 4 4 4-4M6 17l4-4 4 4M4 10h12"/></svg></button>
+        </div>
+        <div class="floor-layer-tools">
+        <details class="popover floor-settings">
+          <summary aria-label="图层设置" title="图层设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 6h4"/></svg></summary>
+          <div class="menu">
+            <label class="field">全层单格尺寸<select id="floor-size"><option value="4">4 px</option><option value="8">8 px</option><option value="16" selected>16 px</option><option value="32">32 px</option><option value="64">64 px</option><option value="128">128 px</option><option value="256">256 px</option></select></label>
+            <p>仅原创底稿可统一调整；导入素材保持原生尺寸。每层的＋用于加图，拖拽手柄调整合成顺序。</p>
+          </div>
+        </details>
+        <details id="floor-add-menu" class="popover">
+          <summary>＋ 新建图层</summary>
+          <div class="menu">
+            <label class="field">名称<input id="floor-layer-name" maxlength="48" placeholder="例如：岩壁苔藓"></label>
+            <label class="field">绘制方式<select id="floor-layer-kind">
+              <option value="terrain">地形点缀 · 随地形选形</option>
+              <option value="wall">背景墙点缀 · 随背景墙选形</option>
+              <option value="">独立图层 · 自己的占用</option>
+            </select></label>
+            <p>从透明空白开始；点缀层单独绘制覆盖区，不改所属层。每层都可导入16态图集与变体。</p>
+            <button id="floor-add-layer" class="button" type="button">创建图层</button>
+          </div>
+        </details>
+        </div>
+      </div>
+      <div id="floor-layer-cards" class="floor-layer-cards"></div>
+      <input id="floor-files" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden>
+    </aside>
     <div id="workbench" class="workbench" data-guide="expanded" data-side="gallery">
     <section id="template-panel" class="guide-pane" role="region" aria-labelledby="template-title">
       <button id="guide-restore" class="pane-rail" aria-label="展开左侧底稿" aria-expanded="false" aria-controls="guide-content" hidden>底稿 ›</button>
@@ -47,18 +100,21 @@
       <header class="workbench-heading">
         <h2 id="template-title">绘制底稿</h2>
         <div class="guide-actions">
+          <button id="import-open" class="button" title="导入完整16态图集，可多选同一地形的变体">导入图集</button>
           <button id="compare-guide" class="compare-guide" aria-pressed="false" hidden title="仅切换左侧预览，保留作品与右侧拼接">对照底稿</button>
-          <div class="split-export">
-            <button id="example-export" title="生成示例 PNG：底色＋当前辅助线，海域透明">导出底稿</button>
+          <button id="source-open" class="icon-button source-settings" aria-haspopup="dialog" aria-controls="source-panel" aria-label="图集切分与映射" title="图集切分与映射"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 6h4"/></svg></button>
             <details class="popover export-menu guide-export-menu">
-              <summary aria-label="选择底稿导出格式" title="更多底稿格式">⌄</summary>
+              <summary aria-label="导出当前图集与底稿">导出 <span aria-hidden="true">⌄</span></summary>
               <div class="menu">
+                <button id="atlas-export">图集 PNG <small>当前变体 · AnyRuleD 4×4 · 原生尺寸</small></button>
+                <button id="mapping-export">映射 JSON <small>当前变体的切分与状态对应</small></button>
+                <span class="menu-label">绘制底稿</span>
                 <button id="guide-export">分层 SVG <small>推荐绘制 · 底色／立面／辅助线分层</small></button>
                 <button id="template-export">纯底色 PNG <small>不含辅助线，海域透明</small></button>
+                <button id="example-export">参考 PNG <small>底色＋当前辅助线，海域透明</small></button>
                 <button id="overlay-export">辅助线 PNG <small>透明参考层，与纯底色同尺寸</small></button>
               </div>
             </details>
-          </div>
           <button id="guide-toggle" class="icon-button" aria-label="收起左侧底稿" aria-expanded="true" aria-controls="guide-content" title="收起到底稿窄栏">‹</button>
         </div>
       </header>
@@ -75,6 +131,7 @@
         </details>
         <span id="template-topology" class="context-tag">连续底稿</span>
       </div>
+      <div id="floor-layer-note" class="floor-layer-note" role="status" hidden></div>
       <div class="template-board preview-surface"><canvas id="template-canvas" aria-label="连续16态美术绘制模板"></canvas></div>
       <div id="template-warning" class="template-warning" role="status" hidden></div>
       <div class="canvas-caption"><span id="template-legend"><i class="land-key"></i>陆地 <i class="coast-key"></i><span id="edge-caption">海岸</span> <i class="wall-key" hidden></i><span id="wall-caption" hidden>前沿立面</span> <i class="sea-key"></i>海面参考（不导出）</span><span id="template-dimensions" class="dimensions">512 × 512 px · 4×4</span></div>
@@ -85,46 +142,53 @@
       <div id="side-content" class="side-content">
       <header class="workbench-heading">
         <div class="tabs" role="tablist" aria-label="右侧工作模式">
-          <button id="gallery-tab" role="tab" aria-selected="true" aria-controls="gallery-panel" class="active">拼接检查 <span>08</span></button>
+          <button id="gallery-tab" role="tab" aria-selected="true" aria-controls="gallery-panel" class="active">拼接检查 <span>09</span></button>
           <button id="paint-tab" role="tab" aria-selected="false" aria-controls="paint-panel" tabindex="-1">自由试画</button>
+        </div>
+        <div id="floor-scene-preview" class="floor-preview-status" hidden>
+          <svg class="floor-preview-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5Z"/><circle cx="10" cy="10" r="2.3"/></svg>
+          <span data-floor-preview-name role="status"></span>
+          <button type="button" data-floor-preview-clear aria-label="取消固定预览" title="取消固定，恢复合成预览"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m5 5 6 6M11 5l-6 6"/></svg></button>
         </div>
         <button id="side-toggle" class="text-button" aria-label="隐藏右侧工作区" aria-expanded="true" aria-controls="side-content">隐藏 ›</button>
       </header>
     <section id="gallery-panel" role="tabpanel" aria-labelledby="gallery-tab">
-      <div class="context-bar">
-        <span class="coverage">覆盖 <b id="coverage-count">16/16</b></span>
-        <span class="pin-count">钉住 <b id="pin-count">0 / 4</b></span>
-        <div class="batch-actions"><label class="seed-label">种子 <input id="seed" type="number" min="0" max="4294967295" value="42817" aria-label="地形种子"></label><button id="regenerate" class="button" title="仅更新浏览栏，钉住栏保持原来的组">换一组</button></div>
-      </div>
+      <div id="gallery-controls" class="batch-actions"><label class="seed-label">种子 <input id="seed" type="number" min="0" max="4294967295" value="42817" aria-label="地形种子" title="输入种子后按Enter重现该组"></label><button id="regenerate" class="button" title="随机生成新种子并更新浏览组，钉住栏保持不变">换一组</button></div>
       <div id="gallery" class="gallery" aria-label="拼接检查分栏"></div>
     </section>
     <section id="paint-panel" role="tabpanel" aria-labelledby="paint-tab" hidden>
       <div class="context-bar paint-heading">
-        <span class="paint-hint">滚轮缩放 · 空格拖动 · Shift / 右键擦除</span>
-        <div class="paint-actions"><button id="paint-pan" class="button" aria-pressed="false">移动</button><button id="paint-mode" class="button" aria-pressed="false">模式：绘制</button><button id="undo" class="button">撤销</button><button id="clear" class="button">清空</button><button id="paint-export" class="button">导出 PNG</button></div>
+        <span id="paint-hint" class="paint-hint">滚轮缩放 · 空格拖动 · Shift / 右键擦除</span>
+        <div class="paint-actions"><button id="paint-pan" class="button" aria-pressed="false">移动</button><button id="paint-pick" class="button" aria-pressed="false" title="选取工具：左键只选中，不绘制；选取对象在顶栏切换">选取</button><button id="paint-mode" class="button" aria-pressed="true">模式：绘制</button><button id="undo" class="button">撤销</button><button id="clear" class="button">清空</button><button id="paint-export" class="button">导出 PNG</button></div>
       </div>
       <div class="paint-wrap preview-surface"><canvas id="paint-canvas" aria-label="自由试画地形画布" tabindex="0"></canvas></div>
     </section>
       </div>
     </section>
     </div>
+    </div>
     <footer class="statusbar">
-      <span id="inspection">NW 8 · NE 4 · SW 2 · SE 1</span>
       <button id="unselect" class="text-button" hidden>取消追踪 ×</button>
       <details class="popover help">
         <summary aria-label="操作说明">?</summary>
         <div class="menu">
           <strong>操作说明</strong>
-          <p>导入 PNG / WebP / JPEG，最大 16 MiB。尺寸自动识别；输入类型、边距及状态顺序在「切分 / 映射」中设置。</p>
+          <p>「分层模板」使用2套必需16态图集：泥土地形＋透明草皮，另有1套可选独立背景墙。三张常驻卡片按上→下排列，点卡片切换编辑层，直接开关各层显示。每层＋或拖图会在已有作品后追加同层变体；首次加图替换教学底稿。「替换本层」替换该层全部变体，其他层保留。缩略图可直接选择，移除只影响所选变体，最后一张保留。单层作品与分层工作分别保留；单格尺寸在图层堆栈的设置图标中调整，完整绘制包在「文件→导出全部图层」。工具内置为原创教学底稿，不含泰拉瑞亚原图。</p>
+          <p>图层堆栈中每层的「层预览」可固定单层预览，再点或点击右侧固定预览标签的×恢复合成。固定层与编辑层独立，切换编辑层不会改变固定对象；固定期间临时显示该层，不改各层显隐。右侧工作区标题栏会显示已固定层名称。自由试画仍修改当前编辑层。</p>
+          <p>草皮图集按地形16态选形；自由试画选草皮层时仅画独立覆盖区，不修改泥土。覆盖区用四角几何硬裁切收口，不模拟草生长、光照、斜坡或原版墙外扩；这些预览信息不会自动变成AnyRuleD／Unity规则。选择墙层则编辑独立墙占用。每层撤销分开，清空仅影响当前层。</p>
+          <p>导入 PNG / WebP / JPEG，每张最大16 MiB，可多选同地形的变体（最多8套，同尺寸／排版；本批文件≤32 MiB，整组解码≤16777216像素）。单层在素材预览标题栏点击「导入图集」，分层使用每层＋。标题栏的设置图标打开切分／映射，也可追加变体或载入原创示例；不同材质／背景墙不要作为随机变体。</p>
+          <p>多变体时，单层模式在顶栏选择左侧当前变体，分层模式直接点所在层的缩略图；右侧可固定此套或按位置稳定混用。「换纹理」只换纹理种子，不改地形；缩放、重绘和场景PNG导出使用相同选择。图集／映射导出仅针对左侧当前变体，跨变体共边仍需检查。每张缩略图是一套完整16态图集，不是单块tile。</p>
           <p>画布100%／1×是各自适应当前窗口的基准，不是原像素大小；切分辨率后保持相对倍率和位置，不会把4／8px缩成小图。倍率按钮回到1×，回正同时居中。顶部「原像素1:1」才是一个源像素对应一个CSS像素，按钮显示1:1；导出始终保持原生尺寸。</p>
           <p>像素模式在原生网格生成硬边底稿，固定颜色、alpha仅0或255，支持4／8／16～256px。导出辅助层按像素绘制，页面网格保持1px细线；4／8px省略放不下的编号，细边与厚度按整像素量化。双线性保留平滑路径。导入作品不做去透明或改色；精查真实像素可选「原像素1:1」。</p>
           <p>顶栏图标一键切换切分线／逻辑线／角点／编号／海面，悬停查看名称；快捷键依次为 G／L／P／N／W，B 切换背景。输入框和弹窗内不触发。</p>
-          <p>左侧「导出底稿」生成示例PNG（含当前辅助线），旁边箭头提供纯底色PNG、辅助线PNG和推荐作画的分层SVG。蓝色海面不导出；在新图层作画，导回前隐藏参考／辅助线层。</p>
+          <p>素材预览标题栏的「导出」集中提供当前变体图集PNG、映射JSON及绘制底稿。底稿可选分层SVG、纯底色PNG、含当前辅助线的参考PNG或透明辅助线PNG。蓝色海面不导出；在新图层作画，导回前隐藏参考／辅助线层。</p>
           <p>左侧「画法」选择平面或伪透视：上沿薄边、下沿厚立面，厚度在底稿设置中调节。伪透视自动使用正视角；切等距会恢复平面。只影响生成底稿；导入作品不会被重绘。立面收在格内，不模拟真实高度或悬挑。</p>
           <p>未导入时左侧显示底稿；导入成功后自动显示作品，标题旁「对照底稿／返回作品」只切换左侧，不替换作品或右侧拼接。对照与底稿导出跟随作品原生单格尺寸；切分无效时明确暂停作品预览，可点击对照继续看底稿。</p>
           <p>等距仅支持 2:1 地面，不支持高度或越界悬挑。输入类型与预览视角独立。</p>
-          <p>点击图块追踪状态；试画支持 Ctrl / Cmd + Z，最多撤销 40 步。页面关闭不保留数据。所有图像只在本地处理。</p>
-          <p>检查栏点击「下一张」翻页，圆点可直接跳转。钉住会新增一栏并保留当前组，浏览栏自动下一张；最多4个钉住栏，每栏仍可独立翻页。换一组不影响钉住栏；素材与显示设置同步更新，窄屏可横向滚动分栏。</p>
+          <p>顶栏「选取：渲染格／逻辑格」决定单击对象，辅助线开关不改变选取模式。悬停虚线预览，单击实线锁定，再点同位置、点画布信息的×或Esc取消。选逻辑格显示半格偏移主选区及周围4个渲染格；边界不环绕，素材外按0读取。淡色四分区只表示位置贡献，不要求素材按象限独立绘制。</p>
+          <p>各画布左上角显示精简选格信息，悬停信息可查看完整素材来源；点×或Esc取消选区。右上角链条按钮开启跨画布关联：点击渲染格，在当前画布、底稿和其他可见画布标出同一图层的相同状态，不区分纹理变体；点击逻辑格，底稿标出周围四格的状态切片，场景匹配中心值及左上／右上／左下／右下四格的完整组合。覆盖层还匹配实际覆盖区；素材范围外不发起关联。固定预览其他图层时不跨层关联。关闭链条保留单点选取。图集设置中的切片追踪独立，取消追踪与取消选区互不影响。</p>
+          <p>自由试画默认绘制，需点「选取」才只选不画；再点返回原笔刷。移动／选取／绘制互斥，选取时拖动仍平移，不记录笔画或撤销。试画支持 Ctrl / Cmd + Z，最多撤销40步。顶栏用小圆点与文字显示自动保存结果；「文件」提供立即保存和完整备份导出／载入。清理浏览器数据、更换浏览器或入口路径前请导出备份。所有图像只在本地处理，选区叠层不进入PNG／SVG／绘制包。</p>
+          <p>检查栏点击「下一张」翻页，圆点可直接跳转。钉住会新增一栏并保留当前组，浏览栏自动下一张；最多4个钉住栏，每栏仍可独立翻页。「换一组」随机生成新种子；手动输入种子后按Enter可重现该组。换一组不影响钉住栏；素材与显示设置同步更新，窄屏可横向滚动分栏。</p>
           <p>左侧底稿常驻，可收为窄栏。右侧拼接检查与自由试画互斥，可整体隐藏；点击窄栏恢复。收起不清空钉住、种子或笔画，至少保留一侧展开。窄屏两侧展开时上下排列。</p>
           <p>各画布视图独立；顶部缩放用于统一重置全部画布。试画默认左键绘制，点「移动」后左键平移，也可按住空格或使用中键临时平移。拖动不触发选格，翻检查图会自动回正。</p>
         </div>
@@ -136,10 +200,13 @@
     <div class="dialog-head"><h2 id="source-title">图集设置</h2><button id="source-close" class="text-button" aria-label="关闭图集设置">关闭 ×</button></div>
     <div class="source-body">
       <label id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="选择或拖入16 tile图集">
-        <strong>选择或拖入图集</strong><span>PNG / WebP / JPEG · ≤16 MiB</span>
-        <input id="file" type="file" accept="image/png,image/webp,image/jpeg" hidden>
+        <strong>选择或拖入图集 · 可多选变体</strong><span>同材质／同尺寸／同排版 · 最多8套 · 每张≤16 MiB</span>
+        <input id="file" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden>
       </label>
-      <div class="source-actions"><span>图像不会上传；底稿对照在左侧标题栏。</span></div>
+      <div class="source-actions"><span>选择文件会替换当前组；图像仅在浏览器处理。</span></div>
+      <p id="source-layer-label" class="hint" hidden></p>
+      <div class="variant-import-actions"><button id="variant-add" class="button">追加变体</button><button id="variant-example" class="button">载入变体示例</button><input id="variant-files" type="file" accept="image/png,image/webp,image/jpeg" multiple hidden></div>
+      <p class="hint">每套均须完整包含16态，所有变体共用切分与映射。不同材质、前景和背景墙不要混为一组。混用仅改变外观，不改变四角规则；跨变体接缝仍需美术检查。PNG／映射导出针对左侧当前变体。</p>
       <label class="field">输入类型<select id="source-geometry"><option value="square">正视角 · 方格图集</option><option value="iso-sheet">等距 · 整张菱形图（2:1）</option><option value="iso-cells">等距 · 菱形逐格矩形排版（2:1）</option></select></label>
       <label class="field">图集形状<select id="shape"><option value="auto">自动识别 · 16 格</option><option value="4x4">4 × 4</option><option value="8x2">8 × 2</option><option value="2x8">2 × 8</option><option value="16x1">16 × 1</option><option value="1x16">1 × 16</option></select></label>
       <div class="field-pair">
@@ -164,6 +231,10 @@
   <script src="render.js"></script>
   <script src="sampling.js"></script>
   <script src="viewport.js"></script>
+  <script src="selection.js"></script>
+  <script src="selection-info.js"></script>
+  <script src="selection-link.js"></script>
+  <script src="selection-tools.js"></script>
   <script src="artwork.js"></script>
   <script src="exports.js"></script>
   <script src="imports.js"></script>
@@ -172,6 +243,16 @@
   <script src="ui.js"></script>
   <script src="preview.js"></script>
   <script src="workspace.js"></script>
+  <script src="variants.js"></script>
+  <script src="floor-art.js"></script>
+  <script src="floor-scene.js"></script>
+  <script src="floor-guides.js"></script>
+  <script src="bundle.js"></script>
+  <script src="floor-state.js"></script>
+  <script src="layer-cards.js"></script>
+  <script src="floor-ui.js"></script>
+  <script src="session-codec.js"></script>
+  <script src="session.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

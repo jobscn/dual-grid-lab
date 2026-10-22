@@ -3,6 +3,7 @@
   Lab.bindTemplate = function (app) {
     const $ = app.$, state = app.state, canvas = $("template-canvas"), map = Lab.continuousMap();
     Lab.bindViewport(canvas, { label: "左侧底稿" });
+    app.bindSelection(canvas, () => map);
     app.guideOptions = () => ({
       size: !state.isDemo && state.valid ? state.slice.size : Number($("guide-size").value), color: $("guide-color").value,
       connected: $("saddle").value === "connected", view: $("view").value,
@@ -11,7 +12,8 @@
       labels: $("labels").checked, filter: $("filter").value
     });
     app.drawTemplate = function () {
-      const options = { ...app.guideOptions(), selected: state.selected };
+      if (app.drawFloorTemplate?.()) return;
+      const options = { ...app.guideOptions(), selected: state.trackedMask };
       const isArt = !state.isDemo && !state.compareGuide;
       const pseudo = options.style === "pseudo" && !isArt;
       $("template-title").textContent = isArt ? "作品预览" : state.isDemo ? "绘制底稿" : "底稿对照";
@@ -57,6 +59,7 @@
       }
     };
     app.useDemo = function (notify = true) {
+      app.cancelImport?.();
       const options = app.guideOptions();
       state.source = Lab.makeDemo($("source-geometry").value, {
         size: options.size, color: options.color, connected: options.connected, filter: options.filter,
@@ -64,6 +67,9 @@
       });
       state.fileName = options.style === "pseudo" ? "伪透视连续底稿" : "连续绘制底稿";
       state.isDemo = true;
+      state.sources = [];
+      state.activeVariant = 0;
+      app.syncVariants();
       state.compareGuide = false;
       state.mapping = Lab.layouts.continuous.slice();
       $("layout").value = "continuous";
@@ -98,30 +104,29 @@
       if (state.isDemo) app.useDemo();
       else app.rebuild();
     });
-    canvas.addEventListener("pointermove", event => app.inspect(event, canvas, map));
-    canvas.addEventListener("click", event => {
-      const hit = Lab.hit(event, canvas, map);
-      if (hit.inside) app.select(Lab.mask(map, hit.x, hit.y));
-    });
     $("example-export").addEventListener("click", () => {
+      if (app.exportFloorTemplate?.("reference")) return;
       const options = app.guideOptions(), output = Lab.canvas(1, 1);
       Lab.renderGuide(output, options);
       Lab.downloadCanvas(output, `dual-grid-reference-${options.style}-${options.view}-${options.size}px.png`, app.notify);
-      app.notify("已请求导出示例底稿 PNG（生成底色＋当前辅助线，海域透明）。请在新图层作画；需要可隐藏的辅助层时，使用旁边箭头导出分层 SVG 或两张独立 PNG。");
+      app.notify("已请求导出示例底稿 PNG（生成底色＋当前辅助线，海域透明）。请在新图层作画；导出菜单还提供分层 SVG、纯底色和独立辅助线。");
     });
     $("template-export").addEventListener("click", () => {
+      if (app.exportFloorTemplate?.("art")) return;
       const options = app.guideOptions(), output = Lab.canvas(1, 1);
       Lab.renderGuide(output, { ...options, grid: false, dual: false, logic: false, labels: false });
       Lab.downloadCanvas(output, `dual-grid-continuous-${options.style}-${options.view}-${options.size}px.png`, app.notify);
       app.notify(`已导出无网格的连续底稿。${options.view === "iso" ? "导回时选择「等距·整张连续菱形图」。" : "导回时选择「正视角·方格图集」。"}排版选择「连续绘制」。`);
     });
     $("overlay-export").addEventListener("click", () => {
+      if (app.exportFloorTemplate?.("helpers")) return;
       const options = app.guideOptions(), output = Lab.canvas(1, 1);
       Lab.renderGuide(output, { ...options, overlayOnly: true });
       Lab.downloadCanvas(output, `dual-grid-guide-overlay-${options.view}-${options.size}px.png`, app.notify);
       app.notify("已导出独立辅助线层，与底稿同尺寸；作画时叠在上层，导回前隐藏此层。");
     });
     $("guide-export").addEventListener("click", () => {
+      if (app.exportFloorTemplate?.("svg")) return;
       Lab.download(new Blob([Lab.guideSvg(app.guideOptions())], { type: "image/svg+xml" }),
         `dual-grid-continuous-${$("guide-style").value}-${$("view").value}-layered.svg`);
       app.notify("已导出分层SVG：陆地、边带／立面、轮廓和辅助线独立；海面默认隐藏。请在新图层作画，导回前隐藏网格、角点、编号及参考层，保留原画板尺寸。");

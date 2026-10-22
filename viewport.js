@@ -26,24 +26,48 @@
     grid.setAttribute("hidden", "");
     surface.append(grid);
     const gridPaths = grid.querySelectorAll("path");
+    let gridState = null;
     function setGrid(map, size, settings = {}) {
-      const visible = Boolean(map && (settings.grid || settings.dual));
+      gridState = map && (settings.grid || settings.dual) ? { size, settings } : null;
+      updateGrid();
+    }
+    function updateGrid() {
+      const visible = Boolean(gridState && canvas.labView && usable());
       grid.toggleAttribute("hidden", !visible);
       if (!visible) return;
-      const p = canvas.labView.projection, paths = [[], []];
+      const { size, settings } = gridState, p = canvas.labView.projection;
+      const width = surface.clientWidth, height = surface.clientHeight;
+      const left = parseFloat(canvas.style.left), top = parseFloat(canvas.style.top);
+      const sx = parseFloat(canvas.style.width) / canvas.width;
+      const sy = parseFloat(canvas.style.height) / canvas.height;
+      if (![left, top, sx, sy].every(Number.isFinite) || sx <= 0 || sy <= 0) return;
+      // Invert the visible surface, including the empty space outside the image.
+      const corners = [[0, 0], [width, 0], [0, height], [width, height]].map(([x, y]) =>
+        Lab.inversePoint((x - left) / sx, (y - top) / sy, p));
+      const x0 = Math.floor(Math.min(...corners.map(point => point.x)) / size) - 1;
+      const x1 = Math.ceil(Math.max(...corners.map(point => point.x)) / size) + 1;
+      const y0 = Math.floor(Math.min(...corners.map(point => point.y)) / size) - 1;
+      const y1 = Math.ceil(Math.max(...corners.map(point => point.y)) / size) + 1;
+      const paths = [[], []];
       const line = (target, x1, y1, x2, y2) => {
-        const a = Lab.projectPoint(x1, y1, p), b = Lab.projectPoint(x2, y2, p);
-        target.push(`M${a.x} ${a.y}L${b.x} ${b.y}`);
+        const a = Lab.projectPoint(x1 * size, y1 * size, p);
+        const b = Lab.projectPoint(x2 * size, y2 * size, p);
+        target.push(`M${left + a.x * sx} ${top + a.y * sy}L${left + b.x * sx} ${top + b.y * sy}`);
       };
-      if (settings.grid) {
-        for (let x = 0; x <= map.width; x++) line(paths[0], x * size, 0, x * size, map.height * size);
-        for (let y = 0; y <= map.height; y++) line(paths[0], 0, y * size, map.width * size, y * size);
+      const determinant = Math.abs(p.a * p.d - p.b * p.c) * sx * sy;
+      const spacing = size * determinant / Math.max(Math.hypot(p.a * sx, p.b * sy), Math.hypot(p.c * sx, p.d * sy));
+      // Skip subpixel lines at extreme zoom-out, keeping the grid anchored to the same origin.
+      const step = Math.max(1, 2 ** Math.ceil(Math.log2(2 / spacing)));
+      for (const [index, enabled, offset] of [[0, settings.grid, 0], [1, settings.dual, .5]]) {
+        if (!enabled) continue;
+        for (let x = Math.ceil((x0 - offset) / step) * step + offset; x <= x1; x += step)
+          line(paths[index], x, y0, x, y1);
+        for (let y = Math.ceil((y0 - offset) / step) * step + offset; y <= y1; y += step)
+          line(paths[index], x0, y, x1, y);
       }
-      if (settings.dual) {
-        for (let x = .5; x < map.width; x++) line(paths[1], x * size, 0, x * size, map.height * size);
-        for (let y = .5; y < map.height; y++) line(paths[1], 0, y * size, map.width * size, y * size);
-      }
-      grid.setAttribute("viewBox", `0 0 ${canvas.width} ${canvas.height}`);
+      grid.style.width = `${width}px`;
+      grid.style.height = `${height}px`;
+      grid.setAttribute("viewBox", `0 0 ${width} ${height}`);
       paths.forEach((path, index) => gridPaths[index].setAttribute("d", path.join("")));
     }
     const out = tools.querySelector(".viewport-out"), inside = tools.querySelector(".viewport-in");
@@ -65,6 +89,7 @@
     function update() {
       if (!usable()) {
         grid.setAttribute("hidden", "");
+        canvas.labSelection?.update();
         tools.querySelectorAll("button").forEach(button => button.disabled = true);
         ratio.textContent = "—";
         return;
@@ -83,7 +108,8 @@
       canvas.style.height = `${height}px`;
       canvas.style.left = `${d.w / 2 - centerX * width}px`;
       canvas.style.top = `${d.h / 2 - centerY * height}px`;
-      for (const key of ["width", "height", "left", "top"]) grid.style[key] = canvas.style[key];
+      updateGrid();
+      canvas.labSelection?.update();
       const percent = zoom * 100;
       ratio.textContent = native ? "1:1" : `${percent < 10 ? percent.toFixed(1) : Math.round(percent)}%`;
       ratio.title = `点击回到适应基准1×；当前原像素倍率 ${scale.toFixed(2)}×`;
@@ -105,6 +131,7 @@
     function zoomTo(value, point) {
       if (!usable()) return;
       finish();
+      canvas.labSelection?.clearHover();
       options.onNavigate?.();
       const d = dimensions(), next = clamp(value, minimum, limit()), nextScale = baseline(d) * next;
       const x = (point ? point.x : d.w / 2) - d.w / 2;
@@ -120,6 +147,7 @@
     }
     function preset(value, markLocal = false) {
       finish();
+      canvas.labSelection?.clearHover();
       options.onNavigate?.();
       fit = value === 0;
       native = value === "native";
@@ -138,15 +166,24 @@
         update();
       },
       snapshot: () => ({ fit, native, zoom, centerX, centerY }),
+      restore(snapshot) {
+        ({ fit, native, zoom, centerX, centerY } = snapshot);
+        // Hidden canvases keep these coordinates until their first visible draw.
+        if (usable()) update();
+      },
       refreshCursor: cursor,
-      dispose() { finish(); abort.abort(); tools.remove(); grid.remove(); delete canvas.labViewport; }
+      dispose() {
+        finish(); abort.abort(); tools.remove(); grid.remove();
+        canvas.labSelection?.dispose();
+        delete canvas.labViewport;
+      }
     };
     listen(out, "click", () => zoomTo(relativeZoom() / 1.25));
     listen(inside, "click", () => zoomTo(relativeZoom() * 1.25));
     listen(ratio, "click", () => zoomTo(1));
     listen(home, "click", api.reset);
     listen(surface, "wheel", event => {
-      if (!usable() || event.target.closest(".viewport-tools")) return;
+      if (!usable() || event.target.closest(".viewport-tools,.viewport-info")) return;
       const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? surface.clientHeight : 1);
       if (!delta) return;
       event.preventDefault();
@@ -155,10 +192,11 @@
         { x: event.clientX - rect.left - surface.clientLeft, y: event.clientY - rect.top - surface.clientTop });
     }, { passive: false });
     listen(surface, "pointerdown", event => {
-      if (event.target.closest(".viewport-tools") || !usable() || drag || event.isPrimary === false ||
+      if (event.target.closest(".viewport-tools,.viewport-info") || !usable() || drag || event.isPrimary === false ||
           (event.button !== 0 && event.button !== 1) || (event.button !== 1 && !api.wantsPan())) return;
       event.preventDefault();
       event.stopPropagation();
+      canvas.labSelection?.clearHover();
       options.onNavigate?.();
       surface.focus({ preventScroll: true });
       suppressClick = false;
@@ -187,7 +225,7 @@
       finish();
     }, { capture: true }));
     listen(surface, "click", event => {
-      if (event.target.closest(".viewport-tools") || !suppressClick) return;
+      if (event.target.closest(".viewport-tools,.viewport-info") || !suppressClick) return;
       suppressClick = false;
       event.preventDefault();
       event.stopImmediatePropagation();
