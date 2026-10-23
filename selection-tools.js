@@ -126,7 +126,7 @@
       app.session?.queue();
     });
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && !$("source-panel").open &&
+      if (event.key === "Escape" && !document.querySelector("dialog[open]") &&
           !event.target.closest("input,select,textarea,[contenteditable],.popover")) app.clearSelection();
     });
     app.selectionState = {

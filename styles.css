@@ -359,6 +359,34 @@ input[type=color] { padding: 2px; width: 50px; height: 30px; }
 .corner-dots i:nth-child(3) { bottom: 0; left: 0; }
 .corner-dots i:nth-child(4) { bottom: 0; right: 0; }
 .hint { color: var(--muted); font-size: 11px; margin-bottom: 0; }
+.examples-open { padding: 5px 9px; min-height: 29px; font-size: 11px; color: var(--accent); }
+#examples-panel { width: min(720px, calc(100vw - 24px)); }
+.examples-body { padding: 18px; overflow-y: auto; }
+.examples-intro { margin: 0 0 16px; color: var(--muted); }
+.examples-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.example-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+.example-card > canvas { width: 100%; height: 150px; object-fit: contain; background: #e9e9e1; image-rendering: pixelated; }
+.example-card > div { padding: 14px; }
+.example-card h3, .example-import h3 { margin: 5px 0 8px; font-size: 14px; font-weight: 500; }
+.example-card p { margin: 0 0 12px; color: var(--muted); }
+.example-tag { font-size: 10px; color: var(--accent); }
+.reference-example { background: var(--soft); }
+.example-source { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.example-source a { color: var(--accent); }
+body.example-loading::after { content: "正在载入案例素材…"; position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #f3f3eef0; color: var(--ink); font-size: 14px; }
+.example-card a { color: var(--ink); text-decoration: none; }
+.local-example { grid-column: 1 / -1; background: var(--soft); }
+.example-import { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.example-import p, .example-import li { color: var(--muted); line-height: 1.8; }
+.example-import details { margin-top: 16px; }
+.example-import summary { color: var(--accent); }
+.example-import ol { padding-left: 20px; }
+.example-import li + li { margin-top: 8px; }
+@media (max-width: 540px) {
+  .examples-list { grid-template-columns: minmax(0, 1fr); }
+  .examples-body { padding: 12px; }
+  .example-card > canvas { height: 120px; }
+}
 @media (max-width: 1250px) {
   .masthead { grid-template-columns: minmax(0, 1fr) auto; }
   .header-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }

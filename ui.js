@@ -24,7 +24,7 @@
     });
     document.addEventListener("keydown", event => {
       if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey &&
-          !event.shiftKey && !dialog.open && !event.target.closest("input,select,textarea,[contenteditable]")) {
+          !event.shiftKey && !document.querySelector("dialog[open]") && !event.target.closest("input,select,textarea,[contenteditable]")) {
         const target = { g: "grid", l: "dual", p: "logic", n: "labels", w: "sea-preview", b: "background" }[event.key.toLowerCase()];
         if (target) { event.preventDefault(); $(target).click(); }
       }

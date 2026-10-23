@@ -185,4 +185,5 @@
   Lab.bindWorkspace(app);
   app.rebuild();
   Lab.bindSession(app);
+  Lab.bindExamples(app);
 })(globalThis.DualGridLab);

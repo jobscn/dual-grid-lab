@@ -25,6 +25,7 @@
       </details>
       <input id="session-file" type="file" accept=".json,application/json" hidden>
       <select id="workflow" class="workflow-select" aria-label="绘制流程"><option value="single">单层图集</option><option value="floor">分层模板</option></select>
+      <button id="examples-open" class="button examples-open" type="button" aria-haspopup="dialog" aria-controls="examples-panel">使用案例</button>
       <div class="brand"><span class="brand-mark" aria-hidden="true">◩</span>DUAL GRID <b>LAB</b><span class="version">2.0.0</span></div>
     </div>
     <div class="header-actions">
@@ -196,6 +197,40 @@
     </footer>
     <p id="notice" class="notice" role="status" aria-live="polite"></p>
   </main>
+  <dialog id="examples-panel" aria-labelledby="examples-title">
+    <div class="dialog-head"><h2 id="examples-title">使用案例</h2><button id="examples-close" class="text-button" type="button" aria-label="关闭使用案例">关闭 ×</button></div>
+    <div class="examples-body">
+      <p class="examples-intro">先看拼接效果，再换成自己的素材。内置案例在新窗口打开，工作状态单独保存。</p>
+      <div id="examples-list" class="examples-list">
+        <article class="example-card reference-example">
+          <div><span class="example-tag">Open-Terraria · 3层 · 7套图集</span><h3>草地与泥土</h3><p>原图摘录：透明草皮、泥土地形、泥土背景墙。自动整理16态与纹理变体。</p><a class="button" data-example="terraria-surface" target="_blank" rel="noopener">打开地表案例 ↗</a></div>
+        </article>
+        <article class="example-card reference-example">
+          <div><span class="example-tag">Open-Terraria · 4层 · 10套图集</span><h3>地表与岩石洞穴</h3><p>增加独立岩石地层和石背景墙，各层可分别编辑占用、显隐与预览。</p><a class="button" data-example="terraria-cave" target="_blank" rel="noopener">打开洞穴案例 ↗</a></div>
+        </article>
+        <p class="example-source">参考素材首次打开需联网，载入后自动保存在当前浏览器。来源：<a href="https://github.com/SandboxWorldOnline/Open-Terraria/tree/c7663b9bc83b9f6dbacd240573c2b4b09f568da0" target="_blank" rel="noopener">Open-Terraria · c7663b9</a>。图像权利归 Re-Logic，不包含在本工具MIT许可内。案例为16态适配，不复刻原版全部选帧、材质融合或墙外扩规则。</p>
+        <article class="example-card">
+          <canvas id="example-layers-preview" aria-label="原创分层案例预览"></canvas>
+          <div><span class="example-tag">原创 · 16 px</span><h3>泥土、草皮与背景墙</h3><p>分开查看三个图层，检查洞穴、边缘与草皮覆盖。</p><a class="button" data-example="layers" target="_blank" rel="noopener">打开分层案例 ↗</a></div>
+        </article>
+        <article class="example-card">
+          <canvas id="example-variants-preview" aria-label="原创纹理变体案例预览"></canvas>
+          <div><span class="example-tag">原创 · 分层 · 3 套变体</span><h3>同一地形，不同纹理</h3><p>保留草皮与背景墙，切换地形变体或稳定混用，观察重复纹理和接缝。</p><a class="button" data-example="variants" target="_blank" rel="noopener">打开分层变体案例 ↗</a></div>
+        </article>
+      </div>
+      <section class="example-import" aria-labelledby="example-import-title">
+        <h3 id="example-import-title">导入自己的素材 / 本地案例</h3>
+        <p>分层案例：选择包含分层素材的页面备份 JSON，一次恢复图层与场景，保持分层模式。载入前会自动下载当前工作备份；普通备份仍可从「文件」载入。</p>
+        <button id="example-import" class="button" type="button">导入案例 JSON…</button>
+        <details><summary>泰拉瑞亚素材怎么导入？</summary><ol>
+          <li>先把原始素材整理成完整16态图集。原版大图的帧排布不能直接当作4×4使用，也不能用游戏截图代替图集。</li>
+          <li>切到「分层模板」，在目标层点＋或拖入PNG：泥土放地形层，透明草皮放草皮层，背景墙放墙层。同层可多选纹理变体。</li>
+          <li>点「切分与映射」核对排版。默认每格16 px；其他尺寸先在图层设置中调整。64×64图集选4×4、边距0、间距0，状态排版须与素材一致。</li>
+          <li>在右侧检查拼接，或切到「自由试画」。用图层的预览按钮单独检查各层。</li>
+        </ol><p>原创案例可离线打开；Open-Terraria案例首次需联网载入参考素材，也可从本地导入自己的图集。这里的16态拼接与原版自动选帧规则有差异。</p></details>
+      </section>
+    </div>
+  </dialog>
   <dialog id="source-panel" aria-labelledby="source-title">
     <div class="dialog-head"><h2 id="source-title">图集设置</h2><button id="source-close" class="text-button" aria-label="关闭图集设置">关闭 ×</button></div>
     <div class="source-body">
@@ -253,6 +288,8 @@
   <script src="floor-ui.js"></script>
   <script src="session-codec.js"></script>
   <script src="session.js"></script>
+  <script src="terraria-example.js"></script>
+  <script src="examples.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

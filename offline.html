@@ -368,6 +368,34 @@ input[type=color] { padding: 2px; width: 50px; height: 30px; }
 .corner-dots i:nth-child(3) { bottom: 0; left: 0; }
 .corner-dots i:nth-child(4) { bottom: 0; right: 0; }
 .hint { color: var(--muted); font-size: 11px; margin-bottom: 0; }
+.examples-open { padding: 5px 9px; min-height: 29px; font-size: 11px; color: var(--accent); }
+#examples-panel { width: min(720px, calc(100vw - 24px)); }
+.examples-body { padding: 18px; overflow-y: auto; }
+.examples-intro { margin: 0 0 16px; color: var(--muted); }
+.examples-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.example-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; }
+.example-card > canvas { width: 100%; height: 150px; object-fit: contain; background: #e9e9e1; image-rendering: pixelated; }
+.example-card > div { padding: 14px; }
+.example-card h3, .example-import h3 { margin: 5px 0 8px; font-size: 14px; font-weight: 500; }
+.example-card p { margin: 0 0 12px; color: var(--muted); }
+.example-tag { font-size: 10px; color: var(--accent); }
+.reference-example { background: var(--soft); }
+.example-source { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.example-source a { color: var(--accent); }
+body.example-loading::after { content: "正在载入案例素材…"; position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #f3f3eef0; color: var(--ink); font-size: 14px; }
+.example-card a { color: var(--ink); text-decoration: none; }
+.local-example { grid-column: 1 / -1; background: var(--soft); }
+.example-import { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.example-import p, .example-import li { color: var(--muted); line-height: 1.8; }
+.example-import details { margin-top: 16px; }
+.example-import summary { color: var(--accent); }
+.example-import ol { padding-left: 20px; }
+.example-import li + li { margin-top: 8px; }
+@media (max-width: 540px) {
+  .examples-list { grid-template-columns: minmax(0, 1fr); }
+  .examples-body { padding: 12px; }
+  .example-card > canvas { height: 120px; }
+}
 @media (max-width: 1250px) {
   .masthead { grid-template-columns: minmax(0, 1fr) auto; }
   .header-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
@@ -436,6 +464,7 @@ input[type=color] { padding: 2px; width: 50px; height: 30px; }
       </details>
       <input id="session-file" type="file" accept=".json,application/json" hidden>
       <select id="workflow" class="workflow-select" aria-label="绘制流程"><option value="single">单层图集</option><option value="floor">分层模板</option></select>
+      <button id="examples-open" class="button examples-open" type="button" aria-haspopup="dialog" aria-controls="examples-panel">使用案例</button>
       <div class="brand"><span class="brand-mark" aria-hidden="true">◩</span>DUAL GRID <b>LAB</b><span class="version">2.0.0</span></div>
     </div>
     <div class="header-actions">
@@ -607,6 +636,40 @@ input[type=color] { padding: 2px; width: 50px; height: 30px; }
     </footer>
     <p id="notice" class="notice" role="status" aria-live="polite"></p>
   </main>
+  <dialog id="examples-panel" aria-labelledby="examples-title">
+    <div class="dialog-head"><h2 id="examples-title">使用案例</h2><button id="examples-close" class="text-button" type="button" aria-label="关闭使用案例">关闭 ×</button></div>
+    <div class="examples-body">
+      <p class="examples-intro">先看拼接效果，再换成自己的素材。内置案例在新窗口打开，工作状态单独保存。</p>
+      <div id="examples-list" class="examples-list">
+        <article class="example-card reference-example">
+          <div><span class="example-tag">Open-Terraria · 3层 · 7套图集</span><h3>草地与泥土</h3><p>原图摘录：透明草皮、泥土地形、泥土背景墙。自动整理16态与纹理变体。</p><a class="button" data-example="terraria-surface" target="_blank" rel="noopener">打开地表案例 ↗</a></div>
+        </article>
+        <article class="example-card reference-example">
+          <div><span class="example-tag">Open-Terraria · 4层 · 10套图集</span><h3>地表与岩石洞穴</h3><p>增加独立岩石地层和石背景墙，各层可分别编辑占用、显隐与预览。</p><a class="button" data-example="terraria-cave" target="_blank" rel="noopener">打开洞穴案例 ↗</a></div>
+        </article>
+        <p class="example-source">参考素材首次打开需联网，载入后自动保存在当前浏览器。来源：<a href="https://github.com/SandboxWorldOnline/Open-Terraria/tree/c7663b9bc83b9f6dbacd240573c2b4b09f568da0" target="_blank" rel="noopener">Open-Terraria · c7663b9</a>。图像权利归 Re-Logic，不包含在本工具MIT许可内。案例为16态适配，不复刻原版全部选帧、材质融合或墙外扩规则。</p>
+        <article class="example-card">
+          <canvas id="example-layers-preview" aria-label="原创分层案例预览"></canvas>
+          <div><span class="example-tag">原创 · 16 px</span><h3>泥土、草皮与背景墙</h3><p>分开查看三个图层，检查洞穴、边缘与草皮覆盖。</p><a class="button" data-example="layers" target="_blank" rel="noopener">打开分层案例 ↗</a></div>
+        </article>
+        <article class="example-card">
+          <canvas id="example-variants-preview" aria-label="原创纹理变体案例预览"></canvas>
+          <div><span class="example-tag">原创 · 分层 · 3 套变体</span><h3>同一地形，不同纹理</h3><p>保留草皮与背景墙，切换地形变体或稳定混用，观察重复纹理和接缝。</p><a class="button" data-example="variants" target="_blank" rel="noopener">打开分层变体案例 ↗</a></div>
+        </article>
+      </div>
+      <section class="example-import" aria-labelledby="example-import-title">
+        <h3 id="example-import-title">导入自己的素材 / 本地案例</h3>
+        <p>分层案例：选择包含分层素材的页面备份 JSON，一次恢复图层与场景，保持分层模式。载入前会自动下载当前工作备份；普通备份仍可从「文件」载入。</p>
+        <button id="example-import" class="button" type="button">导入案例 JSON…</button>
+        <details><summary>泰拉瑞亚素材怎么导入？</summary><ol>
+          <li>先把原始素材整理成完整16态图集。原版大图的帧排布不能直接当作4×4使用，也不能用游戏截图代替图集。</li>
+          <li>切到「分层模板」，在目标层点＋或拖入PNG：泥土放地形层，透明草皮放草皮层，背景墙放墙层。同层可多选纹理变体。</li>
+          <li>点「切分与映射」核对排版。默认每格16 px；其他尺寸先在图层设置中调整。64×64图集选4×4、边距0、间距0，状态排版须与素材一致。</li>
+          <li>在右侧检查拼接，或切到「自由试画」。用图层的预览按钮单独检查各层。</li>
+        </ol><p>原创案例可离线打开；Open-Terraria案例首次需联网载入参考素材，也可从本地导入自己的图集。这里的16态拼接与原版自动选帧规则有差异。</p></details>
+      </section>
+    </div>
+  </dialog>
   <dialog id="source-panel" aria-labelledby="source-title">
     <div class="dialog-head"><h2 id="source-title">图集设置</h2><button id="source-close" class="text-button" aria-label="关闭图集设置">关闭 ×</button></div>
     <div class="source-body">
@@ -2041,7 +2104,7 @@ ${layers.join("\n")}
       app.session?.queue();
     });
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && !$("source-panel").open &&
+      if (event.key === "Escape" && !document.querySelector("dialog[open]") &&
           !event.target.closest("input,select,textarea,[contenteditable],.popover")) app.clearSelection();
     });
     app.selectionState = {
@@ -2664,7 +2727,7 @@ ${relief}
     });
     document.addEventListener("keydown", event => {
       if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey &&
-          !event.shiftKey && !dialog.open && !event.target.closest("input,select,textarea,[contenteditable]")) {
+          !event.shiftKey && !document.querySelector("dialog[open]") && !event.target.closest("input,select,textarea,[contenteditable]")) {
         const target = { g: "grid", l: "dual", p: "logic", n: "labels", w: "sea-preview", b: "background" }[event.key.toLowerCase()];
         if (target) { event.preventDefault(); $(target).click(); }
       }
@@ -4376,7 +4439,8 @@ ${relief}
 (function (Lab) {
   "use strict";
   Lab.bindSession = function (app) {
-    const $ = app.$, key = `dual-grid-lab:state:v1:${location.pathname}`;
+    const example = Lab.exampleId();
+    const $ = app.$, key = `dual-grid-lab:state:v1:${location.pathname}${example ? `:example:${example}` : ""}`;
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     const sources = new Map(), identities = new WeakMap();
     const codec = Lab.sessionCodec(app, source => {
@@ -4389,6 +4453,7 @@ ${relief}
     });
     let database, ready = false, paused = false, busy = false, timer = 0, writing = null;
     let lastRaw = null, lastData = "", lastSaved = null;
+    let exampleInitialized = false;
     function status(kind, label, detail) {
       $("session-indicator").dataset.state = kind;
       $("session-indicator").textContent = label;
@@ -4478,7 +4543,7 @@ ${relief}
         paused = true;
         throw new Error("其他页面已更新本地状态；自动保存已暂停，当前页面内容保留");
       }
-      const savedAt = new Date().toISOString(), raw = JSON.stringify({ savedAt, data });
+      const savedAt = new Date().toISOString(), raw = JSON.stringify({ savedAt, data, exampleInitialized });
       // Only point the synchronous checkpoint at images whose IndexedDB transaction completed.
       localStorage.setItem(key, raw);
       lastRaw = raw;
@@ -4530,6 +4595,7 @@ ${relief}
       timer = setTimeout(flush, 150);
     }
     app.session = { queue, flush };
+    app.session.markExampleInitialized = () => { exampleInitialized = true; lastData = ""; };
     function guardUnload(event) {
       if (!ready || busy) { event.preventDefault(); event.returnValue = ""; return; }
       app.finishPaintStroke();
@@ -4591,9 +4657,18 @@ ${relief}
         app.notify("已请求下载完整状态文件，包含素材、图层、试画、撤销历史与工作区设置。");
       } catch (error) { app.notify(`状态导出失败：${error.message}`); }
     });
-    $("session-import").addEventListener("click", () => $("session-file").click());
+    let importWorkflow = null;
+    function chooseImport(workflow = null) {
+      importWorkflow = workflow;
+      $("session-file").click();
+    }
+    app.session.chooseLayeredCase = () => chooseImport("floor");
+    $("session-import").addEventListener("click", () => chooseImport());
+    $("session-file").addEventListener("cancel", () => importWorkflow = null);
     $("session-file").addEventListener("change", async () => {
       const file = $("session-file").files[0];
+      const workflow = importWorkflow;
+      importWorkflow = null;
       $("session-file").value = "";
       if (!file || busy) return;
       let backup = null;
@@ -4601,6 +4676,12 @@ ${relief}
         if (file.size > 192 * 1024 * 1024) throw new Error("状态文件超过192 MiB");
         const data = JSON.parse(await file.text());
         Lab.validateSession(data, $);
+        if (workflow === "floor") {
+          if (!data.floor.slots.terrain)
+            throw new Error("此文件没有分层素材；单层备份请从「文件→载入备份」打开");
+          if (!data.floor.active) data.selection = null;
+          data.floor.active = true;
+        }
         const decoded = [];
         for (const [id, asset] of Object.entries(data.assets)) {
           if (typeof asset.png !== "string" || !asset.png.startsWith("data:image/png;base64,"))
@@ -4635,6 +4716,7 @@ ${relief}
         if (current !== null) localStorage.setItem(`${key}:recovery:${Date.now()}`, current);
         lastRaw = current;
         paused = false;
+        if (example) exampleInitialized = true;
         commit(next, JSON.stringify(next));
         app.notify("已载入状态文件并保存到本机；载入前的工作已请求下载为备份。");
       } catch (error) {
@@ -4654,6 +4736,7 @@ ${relief}
         lastRaw = localStorage.getItem(key);
         if (lastRaw !== null) {
           const saved = JSON.parse(lastRaw);
+          exampleInitialized = saved.exampleInitialized === true;
           const data = Lab.validateSession(saved.data, $);
           await codec.restore(data, await loadAssets(data));
           lastData = JSON.stringify(codec.capture());
@@ -4668,9 +4751,273 @@ ${relief}
         lock(false);
       }
       if (!paused) flush();
-      return { hasSavedState: lastRaw !== null, restored: !paused };
+      return { hasSavedState: lastRaw !== null, restored: !paused, exampleInitialized };
     }
     app.session.ready = Lab.sessionReady = start();
+  };
+})(globalThis.DualGridLab);
+
+</script>
+  <script>
+(function (Lab) {
+  "use strict";
+  const commit = "c7663b9bc83b9f6dbacd240573c2b4b09f568da0";
+  const base = `https://raw.githubusercontent.com/SandboxWorldOnline/Open-Terraria/${commit}/public/sprites/vanilla/`;
+  const sources = {
+    dirt: ["Tiles_0.png", 288, 270, "73b5dcacf4e1621ca61ce6a46c86d50dce2818c48366fde898d498b9437c11a2"],
+    stone: ["Tiles_1.png", 288, 270, "8c6cd50a8b9d70f08d0aa08cfbd862c714b2874cb5c60a7caa9ddea4d55307d9"],
+    grass: ["Tiles_2.png", 288, 1980, "b741ac1e4c67812ae338385713f197a018030b4a8690eb751795a29bdcdfdc68"],
+    dirtWall: ["Wall_2.png", 468, 180, "b667ec7a8768cda7965f8b1edea12e72515dd8b1a117ecea2b1fe494f5dd9951"],
+    stoneWall: ["Wall_1.png", 468, 180, "1bdabe1003efbd19cffe87e74347bde75d49799710ebdd4e9886d7fbdae3d464"]
+  };
+  async function download(key) {
+    const [name, width, height, expected] = sources[key];
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20000);
+    let url;
+    try {
+      const response = await fetch(base + name, { signal: controller.signal });
+      if (!response.ok) throw new Error(`${name} HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength > 4 * 1024 * 1024) throw new Error(`${name} 文件过大`);
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+        value => value.toString(16).padStart(2, "0")).join("");
+      if (hash !== expected) throw new Error(`${name} 与固定来源版本不一致`);
+      const image = new Image();
+      url = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+      image.src = url;
+      await image.decode();
+      if (image.naturalWidth !== width || image.naturalHeight !== height) throw new Error(`${name} 尺寸不符`);
+      const canvas = Lab.canvas(width, height);
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      return canvas;
+    } finally {
+      clearTimeout(timer);
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+  const bits = [[8, 4], [2, 1]];
+  function frame(qx, qy, horizontal, vertical, diagonal, variant) {
+    if (horizontal && vertical) return diagonal ? [1 + variant, 1, true] : [6 + variant, qy === 0 ? 1 : 2, false];
+    if (horizontal) return [1 + variant, qy === 0 ? 0 : 2, false];
+    if (vertical) return [qx === 0 ? 0 : 4, variant, false];
+    return [qx + variant * 2, 3 + qy, false];
+  }
+  function quarters(source, variant, fill) {
+    return Array.from({ length: 16 }, (_, mask) => {
+      const tile = Lab.canvas(16, 16), ctx = tile.getContext("2d");
+      for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
+        if (!(mask & bits[y][x])) continue;
+        const qx = 1 - x, qy = 1 - y;
+        const [col, row, center] = frame(qx, qy, mask & bits[y][1 - x], mask & bits[1 - y][x],
+          mask & bits[1 - y][1 - x], variant);
+        ctx.drawImage(center && fill ? fill : source, col * 18 + qx * 8, row * 18 + qy * 8, 8, 8, x * 8, y * 8, 8, 8);
+      }
+      return tile;
+    });
+  }
+  function terrainVariants(source, name, fill) {
+    const canonical = quarters(source, 0, fill);
+    return [0, 1, 2].map(variant => {
+      const tiles = quarters(source, variant, fill).map((tile, mask) => {
+        const ctx = tile.getContext("2d");
+        const top = (mask & 8 ? 10 : 0) | (mask & 4 ? 5 : 0);
+        const bottom = (mask & 2 ? 10 : 0) | (mask & 1 ? 5 : 0);
+        const left = (mask & 8 ? 12 : 0) | (mask & 2 ? 3 : 0);
+        const right = (mask & 4 ? 12 : 0) | (mask & 1 ? 3 : 0);
+        // Replace complete strips, including transparent pixels, to keep variant edges consistent.
+        for (const [prototype, x, y, w, h] of [[top, 0, 0, 16, 2], [bottom, 0, 14, 16, 2],
+          [left, 0, 0, 2, 16], [right, 14, 0, 2, 16]]) {
+          ctx.clearRect(x, y, w, h);
+          ctx.drawImage(canonical[prototype], x, y, w, h, x, y, w, h);
+        }
+        for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
+          ctx.clearRect(x * 14, y * 14, 2, 2);
+          if (mask & bits[y][x]) ctx.drawImage(canonical[15], x * 14, y * 14, 2, 2, x * 14, y * 14, 2, 2);
+        }
+        if (fill) {
+          const image = ctx.getImageData(0, 0, 16, 16), pixels = image.data;
+          for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+            const at = (y * 16 + x) * 4, boundary = Lab.floorBoundary(mask, (x + .5) / 16, (y + .5) / 16);
+            if (mask === 0 || mask === 15 || !pixels[at + 3] ||
+                pixels[at + 1] <= Math.max(pixels[at], pixels[at + 2]) + 16 ||
+                boundary.normalY >= -.3 || boundary.distance * 16 >= 4) pixels.fill(0, at, at + 4);
+          }
+          ctx.putImageData(image, 0, 0);
+        }
+        return tile;
+      });
+      return { name: `${name}-v${variant + 1}.png`, source: Lab.packCanvas(tiles) };
+    });
+  }
+  function wallSource(source, name) {
+    const canvas = Lab.floorSource("wall", 16), ctx = canvas.getContext("2d");
+    const image = ctx.getImageData(0, 0, 64, 64);
+    const texture = source.getContext("2d").getImageData(44, 44, 16, 16).data;
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+      const at = (y * 64 + x) * 4;
+      if (image.data[at + 3]) image.data.set(texture.subarray(((y % 16) * 16 + x % 16) * 4,
+        ((y % 16) * 16 + x % 16) * 4 + 4), at);
+    }
+    ctx.putImageData(image, 0, 0);
+    return [{ name: `${name}.png`, source: canvas }];
+  }
+  Lab.loadTerrariaExample = async function (app, id) {
+    const $ = app.$, cave = id === "terraria-cave", main = document.querySelector("main");
+    const header = document.querySelector(".masthead");
+    document.body.classList.add("example-loading");
+    header.inert = main.inert = true;
+    try {
+      const keys = ["dirt", "grass", cave ? "stoneWall" : "dirtWall", ...(cave ? ["stone"] : [])];
+      const decoded = await Promise.all(keys.map(async key => [key, await download(key)]));
+      const images = Object.fromEntries(decoded);
+      // Download, verify and prepare every image before changing any workspace layer.
+      const packs = { terrain: terrainVariants(images.dirt, "dirt"),
+        grass: terrainVariants(images.grass, "grass", images.dirt),
+        wall: wallSource(images[cave ? "stoneWall" : "dirtWall"], cave ? "stone-wall" : "dirt-wall") };
+      if (cave) packs.stone = terrainVariants(images.stone, "stone");
+      app.setFloorWorkflow(true);
+      app.floor.roles.find(role => role.id === "grass").name = "透明草皮";
+      app.floor.roles.find(role => role.id === "wall").name = cave ? "石背景墙" : "泥土背景墙";
+      let stoneId;
+      if (cave) {
+        app.addFloorLayer("岩石地形", "");
+        stoneId = app.floor.id;
+        const ordered = app.floor.roles.filter(role => role.id !== stoneId).sort((a, b) => a.order - b.order);
+        ordered.splice(ordered.findIndex(role => role.id === "terrain") + 1, 0,
+          app.floor.roles.find(role => role.id === stoneId));
+        ordered.forEach((role, index) => role.order = index);
+      }
+      for (const [key, sources] of Object.entries(packs)) {
+        app.switchFloorLayer(key === "stone" ? stoneId : key);
+        app.replaceSources(sources);
+        app.state.variantMode = "mixed";
+        app.rebuild();
+      }
+      app.floor.paint = Lab.makeFloorSample(48, 28);
+      if (stoneId) {
+        const map = app.floor.paint, rock = Lab.floorMaps(map, app.floor.roles)[stoneId];
+        for (let y = 0; y <= map.height; y++) for (let x = 0; x <= map.width; x++)
+          Lab.set(rock, x, y, Lab.get(map, x, y) && y / map.height > .59 + Math.sin(x / map.width * 10) * .045);
+      }
+      app.floor.previewId = null;
+      app.switchFloorLayer("terrain");
+      $("grid").checked = false;
+      $("paint-tab").click();
+      app.session.markExampleInitialized();
+      app.rebuild();
+      app.notify(`已从 Open-Terraria ${commit.slice(0, 7)} 载入${cave ? "4" : "3"}层案例，后续刷新从本机恢复。`);
+    } finally {
+      document.body.classList.remove("example-loading");
+      header.inert = main.inert = false;
+    }
+  };
+})(globalThis.DualGridLab);
+
+</script>
+  <script>
+(function (Lab) {
+  "use strict";
+  Lab.exampleId = () => {
+    const id = new URLSearchParams(location.search).get("example");
+    return ["layers", "variants", "terraria-surface", "terraria-cave"].includes(id) ? id : null;
+  };
+  Lab.bindExamples = function (app) {
+    const $ = app.$, dialog = $("examples-panel");
+    document.querySelectorAll("[data-example]").forEach(link => {
+      const url = new URL(location.href);
+      url.searchParams.set("example", link.dataset.example);
+      url.searchParams.set("workflow", "floor");
+      url.hash = "";
+      link.href = url.href;
+    });
+    function previews() {
+      if (dialog.dataset.drawn) return;
+      const size = 16, map = Lab.makeFloorSample(18, 10), slots = {};
+      Lab.floorRoles.forEach(role => {
+        const source = Lab.floorSource(role.id, size);
+        const tiles = Lab.slice(source, Lab.infer(64, 64, "4x4", 0, 0, 0, 0), Lab.layouts.continuous);
+        slots[role.id] = { tiles, flatTiles: tiles, enabled: true, valid: true };
+      });
+      Lab.renderFloor($("example-layers-preview"), map, slots,
+        { roles: Lab.floorRoles, unitSize: size, view: "ortho", filter: "nearest" });
+      const packs = Lab.variantExample().map(entry => {
+        const tiles = Lab.slice(entry.source, Lab.infer(64, 64, "4x4", 0, 0, 0, 0), Lab.layouts.continuous);
+        return { tiles, flatTiles: tiles };
+      });
+      Lab.renderMap($("example-variants-preview"), map, packs[0].tiles,
+        { size, view: "ortho", filter: "nearest", variantPacks: packs, variantSeed: 42817 });
+      dialog.dataset.drawn = "true";
+    }
+    $("examples-open").addEventListener("click", () => {
+      document.querySelectorAll(".popover[open]").forEach(menu => menu.open = false);
+      previews();
+      dialog.showModal();
+    });
+    $("examples-close").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", event => {
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right ||
+          event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+    });
+    $("example-import").addEventListener("click", () => {
+      dialog.close();
+      app.session.chooseLayeredCase();
+    });
+    // Local reference pages may add their own cards without bundling private assets in the app.
+    Lab.addLocalExample = function ({ title, description, href }) {
+      const url = new URL(href, location.href);
+      if (!["file:", "http:", "https:"].includes(url.protocol)) return;
+      url.searchParams.set("workflow", "floor");
+      url.searchParams.delete("example");
+      const card = document.createElement("article");
+      card.className = "example-card local-example";
+      const body = document.createElement("div"), tag = document.createElement("span");
+      tag.className = "example-tag";
+      tag.textContent = "本地参考 · 私有素材";
+      const heading = document.createElement("h3"), text = document.createElement("p"), link = document.createElement("a");
+      heading.textContent = title;
+      text.textContent = description;
+      link.className = "button";
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "打开素材案例 ↗";
+      body.append(tag, heading, text, link);
+      card.append(body);
+      $("examples-list").prepend(card);
+    };
+    Lab.examplesReady = app.session.ready.then(async memory => {
+      const id = Lab.exampleId();
+      const layered = id || new URLSearchParams(location.search).get("workflow") === "floor";
+      if (!layered || !memory.restored) return memory;
+      if (id?.startsWith("terraria-")) {
+        app.setFloorWorkflow(true);
+        if (!memory.exampleInitialized) await Lab.loadTerrariaExample(app, id);
+        return memory;
+      }
+      const newLayers = !app.floor.slots.terrain;
+      // Case links declare their workflow even when an older checkpoint saved single mode.
+      app.setFloorWorkflow(true);
+      if (!id || memory.hasSavedState && !newLayers) return memory;
+      $("grid").checked = false;
+      app.floor.slots.wall.enabled = true;
+      if (id === "variants") app.loadFloorVariants();
+      app.rebuild();
+      app.notify("已打开原创分层案例；此案例的工作状态单独保存。");
+      return memory;
+    });
+    Lab.examplesReady.catch(error => app.notify(`案例初始化失败：${error.message}`));
+    // Reference pages initialize through the same readiness barrier as restored examples.
+    Lab.initializeLocalExample = async function (initialize) {
+      const memory = await Lab.examplesReady;
+      if (!memory.restored || Lab.exampleId()) return;
+      app.setFloorWorkflow(true);
+      if (!memory.hasSavedState) await initialize(app);
+      app.syncFloorUi();
+      app.rebuild();
+      return memory;
+    };
   };
 })(globalThis.DualGridLab);
 
@@ -4863,6 +5210,7 @@ ${relief}
   Lab.bindWorkspace(app);
   app.rebuild();
   Lab.bindSession(app);
+  Lab.bindExamples(app);
 })(globalThis.DualGridLab);
 
 </script>

@@ -1,7 +1,8 @@
 (function (Lab) {
   "use strict";
   Lab.bindSession = function (app) {
-    const $ = app.$, key = `dual-grid-lab:state:v1:${location.pathname}`;
+    const example = Lab.exampleId();
+    const $ = app.$, key = `dual-grid-lab:state:v1:${location.pathname}${example ? `:example:${example}` : ""}`;
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     const sources = new Map(), identities = new WeakMap();
     const codec = Lab.sessionCodec(app, source => {
@@ -14,6 +15,7 @@
     });
     let database, ready = false, paused = false, busy = false, timer = 0, writing = null;
     let lastRaw = null, lastData = "", lastSaved = null;
+    let exampleInitialized = false;
     function status(kind, label, detail) {
       $("session-indicator").dataset.state = kind;
       $("session-indicator").textContent = label;
@@ -103,7 +105,7 @@
         paused = true;
         throw new Error("其他页面已更新本地状态；自动保存已暂停，当前页面内容保留");
       }
-      const savedAt = new Date().toISOString(), raw = JSON.stringify({ savedAt, data });
+      const savedAt = new Date().toISOString(), raw = JSON.stringify({ savedAt, data, exampleInitialized });
       // Only point the synchronous checkpoint at images whose IndexedDB transaction completed.
       localStorage.setItem(key, raw);
       lastRaw = raw;
@@ -155,6 +157,7 @@
       timer = setTimeout(flush, 150);
     }
     app.session = { queue, flush };
+    app.session.markExampleInitialized = () => { exampleInitialized = true; lastData = ""; };
     function guardUnload(event) {
       if (!ready || busy) { event.preventDefault(); event.returnValue = ""; return; }
       app.finishPaintStroke();
@@ -216,9 +219,18 @@
         app.notify("已请求下载完整状态文件，包含素材、图层、试画、撤销历史与工作区设置。");
       } catch (error) { app.notify(`状态导出失败：${error.message}`); }
     });
-    $("session-import").addEventListener("click", () => $("session-file").click());
+    let importWorkflow = null;
+    function chooseImport(workflow = null) {
+      importWorkflow = workflow;
+      $("session-file").click();
+    }
+    app.session.chooseLayeredCase = () => chooseImport("floor");
+    $("session-import").addEventListener("click", () => chooseImport());
+    $("session-file").addEventListener("cancel", () => importWorkflow = null);
     $("session-file").addEventListener("change", async () => {
       const file = $("session-file").files[0];
+      const workflow = importWorkflow;
+      importWorkflow = null;
       $("session-file").value = "";
       if (!file || busy) return;
       let backup = null;
@@ -226,6 +238,12 @@
         if (file.size > 192 * 1024 * 1024) throw new Error("状态文件超过192 MiB");
         const data = JSON.parse(await file.text());
         Lab.validateSession(data, $);
+        if (workflow === "floor") {
+          if (!data.floor.slots.terrain)
+            throw new Error("此文件没有分层素材；单层备份请从「文件→载入备份」打开");
+          if (!data.floor.active) data.selection = null;
+          data.floor.active = true;
+        }
         const decoded = [];
         for (const [id, asset] of Object.entries(data.assets)) {
           if (typeof asset.png !== "string" || !asset.png.startsWith("data:image/png;base64,"))
@@ -260,6 +278,7 @@
         if (current !== null) localStorage.setItem(`${key}:recovery:${Date.now()}`, current);
         lastRaw = current;
         paused = false;
+        if (example) exampleInitialized = true;
         commit(next, JSON.stringify(next));
         app.notify("已载入状态文件并保存到本机；载入前的工作已请求下载为备份。");
       } catch (error) {
@@ -279,6 +298,7 @@
         lastRaw = localStorage.getItem(key);
         if (lastRaw !== null) {
           const saved = JSON.parse(lastRaw);
+          exampleInitialized = saved.exampleInitialized === true;
           const data = Lab.validateSession(saved.data, $);
           await codec.restore(data, await loadAssets(data));
           lastData = JSON.stringify(codec.capture());
@@ -293,7 +313,7 @@
         lock(false);
       }
       if (!paused) flush();
-      return { hasSavedState: lastRaw !== null, restored: !paused };
+      return { hasSavedState: lastRaw !== null, restored: !paused, exampleInitialized };
     }
     app.session.ready = Lab.sessionReady = start();
   };
