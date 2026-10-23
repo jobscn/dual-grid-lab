@@ -1,7 +1,6 @@
 (function (Lab) {
   "use strict";
-  const inside = (map, x, y, logic = false) =>
-    x >= 0 && y >= 0 && x < map.width + Number(logic) && y < map.height + Number(logic);
+  const inside = Lab.gridInside;
   const masks = (map, selection) => Lab.selectionTiles({ ...selection, kind: "logic" })
     .map(tile => inside(map, tile.x, tile.y) ? Lab.mask(map, tile.x, tile.y) : -1);
   Lab.selectionLinkPattern = function (context, selection) {
@@ -19,23 +18,22 @@
     if (to.template || source.kind === "render") {
       result.kind = "render";
       const region = Lab.mask(from.map, source.x, source.y);
-      for (let y = 0; y < to.map.height; y++)
-        for (let x = 0; x < to.map.width; x++)
-          if (result.masks.includes(Lab.mask(to.shape, x, y)) &&
-              (to.template || from.template || !from.coverage || Lab.mask(to.map, x, y) === region))
-            result.matches.push({ x, y });
+      Lab.eachGridTile(to.shape, (x, y) => {
+        if (result.masks.includes(Lab.mask(to.shape, x, y)) &&
+            (to.template || from.template || !from.coverage || Lab.mask(to.map, x, y) === region))
+          result.matches.push({ x, y });
+      });
       return result;
     }
     const pattern = Lab.selectionLinkPattern(from, source);
     const coverage = from.coverage && !from.template ? Lab.selectionLinkPattern({ shape: from.map }, source) : null;
-    for (let y = 0; y <= to.map.height; y++)
-      for (let x = 0; x <= to.map.width; x++) {
-        const candidate = { x, y };
-        if (!Lab.selectionLinkPattern(to, candidate).every((value, index) => value === pattern[index])) continue;
-        if (coverage && !Lab.selectionLinkPattern({ shape: to.map }, candidate)
-          .every((value, index) => value === coverage[index])) continue;
-        result.matches.push(candidate);
-      }
+    Lab.eachGridTile(to.shape, (x, y) => {
+      const candidate = { x, y };
+      if (!Lab.selectionLinkPattern(to, candidate).every((value, index) => value === pattern[index])) return;
+      if (coverage && !Lab.selectionLinkPattern({ shape: to.map }, candidate)
+        .every((value, index) => value === coverage[index])) return;
+      result.matches.push(candidate);
+    }, null, true);
     return result;
   };
 })(globalThis.DualGridLab);

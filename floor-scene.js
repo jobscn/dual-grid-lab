@@ -9,7 +9,8 @@
         const layer = result[role.id] = Lab.map(map.width, map.height, role.name, "", "");
         // Inspection scenes exercise the atlas; the editable paint map is cleared at layer creation.
         if (role.shapeFrom) layer.cells.fill(1);
-        else layer.cells.set(map.cells);
+        else Lab.copyGrid(layer, map);
+        if (map.chunks) Lab.enableSparse(layer);
       }
       for (const id of Object.keys(result))
         if (!["terrain", "wall", "grass"].includes(id) && !roles.some(role => role.id === id)) delete result[id];
@@ -17,9 +18,10 @@
     }
     const wall = Lab.map(map.width, map.height, "背景墙", "", "");
     const cover = Lab.map(map.width, map.height, "草皮覆盖区域", "", "");
-    wall.cells.set(map.cells);
+    Lab.copyGrid(wall, map);
     cover.cells.fill(1);
     const result = { terrain: map, wall, grass: cover };
+    if (map.chunks) Object.values(result).forEach(Lab.enableSparse);
     auxiliary.set(map, result);
     return Lab.floorMaps(map, roles);
   };

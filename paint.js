@@ -11,13 +11,14 @@
     function finishStroke() {
       if (!stroke) return;
       const id = stroke.pointerId;
+      Lab.endGridEdit(stroke.map);
       stroke = null;
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     }
     app.finishPaintStroke = finishStroke;
     app.syncPaintHistory = () => $("undo").disabled = history().length === 0;
     const viewport = Lab.bindViewport(canvas, { label: "自由试画", canPan: view => moveMode || selectMode || view.space,
-      onNavigate: finishStroke });
+      onNavigate: finishStroke, onViewChange: app.schedule });
     app.bindSelection(canvas, () => app.basePaint(), () => selectMode && app.sceneValid(), () => app.sceneValid());
     function setTool(tool) {
       finishStroke();
@@ -32,9 +33,9 @@
     }
     $("paint-pan").addEventListener("click", () => setTool(moveMode ? "draw" : "move"));
     $("paint-pick").addEventListener("click", () => setTool(selectMode ? "draw" : "select"));
-    const remember = () => {
+    const remember = (delta = false) => {
       const entries = history();
-      entries.push(app.paintMap().cells.slice());
+      entries.push(delta ? Lab.beginGridEdit(app.paintMap()) : Lab.gridData(app.paintMap()));
       if (entries.length > 40) entries.shift();
       $("undo").disabled = false;
     };
@@ -54,7 +55,7 @@
     function paint(event) {
       if (!stroke || stroke.pointerId !== event.pointerId || viewport.wantsPan()) return;
       const map = stroke.map;
-      const hit = Lab.hit(event, canvas, map);
+      const hit = Lab.hitGrid(event, canvas);
       if (!hit.inside) { stroke.last = null; return; }
       const point = { x: hit.sampleX, y: hit.sampleY };
       drawLine(stroke.last || point, point, stroke.value, map);
@@ -63,11 +64,12 @@
     }
     canvas.addEventListener("pointerdown", event => {
       if (!app.state.valid || selectMode || stroke || viewport.wantsPan() || (event.button !== 0 && event.button !== 2)) return;
+      app.basePaint();
       const map = app.paintMap();
-      if (!Lab.hit(event, canvas, map).inside) return;
+      if (!Lab.hitGrid(event, canvas).inside) return;
       event.preventDefault();
       canvas.focus({ preventScroll: true });
-      remember();
+      remember(true);
       stroke = { pointerId: event.pointerId, map, value: eraser || event.shiftKey || event.button === 2 ? 0 : 1 };
       canvas.setPointerCapture(event.pointerId);
       paint(event);
@@ -76,7 +78,7 @@
       paint(event);
     });
     function end(event) {
-      if (stroke && stroke.pointerId === event.pointerId) stroke = null;
+      if (stroke && stroke.pointerId === event.pointerId) finishStroke();
     }
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => canvas.addEventListener(name, end));
     canvas.addEventListener("contextmenu", event => event.preventDefault());
@@ -88,7 +90,7 @@
     function undo() {
       const entries = history();
       if (!entries.length || stroke) return;
-      app.paintMap().cells.set(entries.pop());
+      Lab.undoGrid(app.paintMap(), entries.pop());
       $("undo").disabled = entries.length === 0;
       app.schedule();
     }
@@ -103,7 +105,7 @@
     $("clear").addEventListener("click", () => {
       finishStroke();
       remember();
-      app.paintMap().cells.fill(0);
+      Lab.clearGrid(app.paintMap());
       app.schedule();
     });
     $("paint-export").addEventListener("click", () => app.exportMap(app.basePaint(), "dual-grid-freepaint.png"));
@@ -112,7 +114,7 @@
         const maps = { single: app.state.paint, ...Lab.floorMaps(app.floor.paint, app.floor.roles) };
         return { eraser, tool: moveMode ? "move" : selectMode ? "select" : "draw",
           histories: Object.fromEntries(Object.entries(maps).map(([id, map]) =>
-            [id, (histories.get(map) || []).map(cells => Array.from(cells))])) };
+            [id, (histories.get(map) || []).slice()])) };
       },
       restore(snapshot) {
         eraser = snapshot.eraser;
@@ -120,7 +122,7 @@
         setTool(snapshot.tool);
         const maps = { single: app.state.paint, ...Lab.floorMaps(app.floor.paint, app.floor.roles) };
         Object.entries(maps).forEach(([id, map]) =>
-          histories.set(map, (snapshot.histories[id] || []).map(cells => Uint8Array.from(cells))));
+          histories.set(map, (snapshot.histories[id] || []).slice()));
         app.syncPaintHistory();
       }
     };

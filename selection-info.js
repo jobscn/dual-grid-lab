@@ -24,7 +24,7 @@
     const index = !context.template && slot.variantMode === "mixed" ?
       Lab.variantIndex(tile.x, tile.y, packs.length, slot.variantSeed) : slot.activeVariant;
     const pack = packs[index], rect = Lab.sourceRect(slot.slice, slot.mapping.indexOf(mask));
-    const outside = tile.x < 0 || tile.y < 0 || tile.x >= context.map.width || tile.y >= context.map.height;
+    const outside = !Lab.gridInside(context.map, tile.x, tile.y);
     // Generated guide comparison is not a crop from the imported source.
     const reference = context.template && app.state.compareGuide;
     return { ...tile, mask, region, context, index, rect, reference, outside,
@@ -36,7 +36,7 @@
     if (selection.kind === "logic") {
       const value = Lab.get(context.map, x, y);
       return `${context.label} · L(${x}, ${y}) = ${value} · 关联4个渲染格` +
-        (x < 0 || y < 0 || x > context.map.width || y > context.map.height ? " · 素材范围外，逻辑值为0" : "") +
+        (!Lab.gridInside(context.map, x, y, true) ? " · 素材范围外，逻辑值为0" : "") +
         (context.coverage ? " · 覆盖区用于裁切；选图使用所属层四角" : "");
     }
     const tile = Lab.selectionTileInfo(app, selection, { x, y });

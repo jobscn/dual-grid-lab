@@ -159,7 +159,7 @@
     </section>
     <section id="paint-panel" role="tabpanel" aria-labelledby="paint-tab" hidden>
       <div class="context-bar paint-heading">
-        <span id="paint-hint" class="paint-hint">滚轮缩放 · 空格拖动 · Shift / 右键擦除</span>
+        <span id="paint-hint" class="paint-hint">自由延伸绘制 · 空格拖动 · Shift / 右键擦除</span>
         <div class="paint-actions"><button id="paint-pan" class="button" aria-pressed="false">移动</button><button id="paint-pick" class="button" aria-pressed="false" title="选取工具：左键只选中，不绘制；选取对象在顶栏切换">选取</button><button id="paint-mode" class="button" aria-pressed="true">模式：绘制</button><button id="undo" class="button">撤销</button><button id="clear" class="button">清空</button><button id="paint-export" class="button">导出 PNG</button></div>
       </div>
       <div class="paint-wrap preview-surface"><canvas id="paint-canvas" aria-label="自由试画地形画布" tabindex="0"></canvas></div>
@@ -188,7 +188,7 @@
           <p>等距仅支持 2:1 地面，不支持高度或越界悬挑。输入类型与预览视角独立。</p>
           <p>顶栏「选取：渲染格／逻辑格」决定单击对象，辅助线开关不改变选取模式。悬停虚线预览，单击实线锁定，再点同位置、点画布信息的×或Esc取消。选逻辑格显示半格偏移主选区及周围4个渲染格；边界不环绕，素材外按0读取。淡色四分区只表示位置贡献，不要求素材按象限独立绘制。</p>
           <p>各画布左上角显示精简选格信息，悬停信息可查看完整素材来源；点×或Esc取消选区。右上角链条按钮开启跨画布关联：点击渲染格，在当前画布、底稿和其他可见画布标出同一图层的相同状态，不区分纹理变体；点击逻辑格，底稿标出周围四格的状态切片，场景匹配中心值及左上／右上／左下／右下四格的完整组合。覆盖层还匹配实际覆盖区；素材范围外不发起关联。固定预览其他图层时不跨层关联。关闭链条保留单点选取。图集设置中的切片追踪独立，取消追踪与取消选区互不影响。</p>
-          <p>自由试画默认绘制，需点「选取」才只选不画；再点返回原笔刷。移动／选取／绘制互斥，选取时拖动仍平移，不记录笔画或撤销。试画支持 Ctrl / Cmd + Z，最多撤销40步。顶栏用小圆点与文字显示自动保存结果；「文件」提供立即保存和完整备份导出／载入。清理浏览器数据、更换浏览器或入口路径前请导出备份。所有图像只在本地处理，选区叠层不进入PNG／SVG／绘制包。</p>
+          <p>自由试画可向四周延伸，支持负坐标与分散笔画，平移后继续绘制。默认绘制，需点「选取」才只选不画；再点返回原笔刷。移动／选取／绘制互斥，选取时拖动仍平移，不记录笔画或撤销。试画支持 Ctrl / Cmd + Z，最多撤销40步。PNG包含原始区域与可见图层的扩展笔画；超出16777216像素或单边32767px时会提示，请改用完整备份保留全部作品。顶栏用小圆点与文字显示自动保存结果；「文件」提供立即保存和完整备份导出／载入。清理浏览器数据、更换浏览器或入口路径前请导出备份。所有图像只在本地处理，选区叠层不进入PNG／SVG／绘制包。</p>
           <p>检查栏点击「下一张」翻页，圆点可直接跳转。钉住会新增一栏并保留当前组，浏览栏自动下一张；最多4个钉住栏，每栏仍可独立翻页。「换一组」随机生成新种子；手动输入种子后按Enter可重现该组。换一组不影响钉住栏；素材与显示设置同步更新，窄屏可横向滚动分栏。</p>
           <p>左侧底稿常驻，可收为窄栏。右侧拼接检查与自由试画互斥，可整体隐藏；点击窄栏恢复。收起不清空钉住、种子或笔画，至少保留一侧展开。窄屏两侧展开时上下排列。</p>
           <p>各画布视图独立；顶部缩放用于统一重置全部画布。试画默认左键绘制，点「移动」后左键平移，也可按住空格或使用中键临时平移。拖动不触发选格，翻检查图会自动回正。</p>
@@ -258,12 +258,14 @@
     </div>
   </dialog>
   <script src="core.js"></script>
+  <script src="sparse-grid.js"></script>
   <script src="cases.js"></script>
   <script src="geometry.js"></script>
   <script src="relief.js"></script>
   <script src="pixel-art.js"></script>
   <script src="pixel-guide.js"></script>
   <script src="render.js"></script>
+  <script src="sparse-render.js"></script>
   <script src="sampling.js"></script>
   <script src="viewport.js"></script>
   <script src="selection.js"></script>

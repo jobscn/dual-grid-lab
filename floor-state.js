@@ -129,7 +129,7 @@
       floor.roles = ordered;
       ordered.forEach((item, index) => item.order = index);
       floor.slots[id] = { ...create(role), enabled: true };
-      Lab.floorMaps(floor.paint, floor.roles)[id].cells.fill(0);
+      Lab.clearGrid(Lab.floorMaps(floor.paint, floor.roles)[id]);
       floor.id = id;
       restore(floor.slots[id]);
       app.rebuild();
@@ -200,7 +200,11 @@
       $("source-panel").close();
       app.notify("已载入当前层的3套原创变体；没有混入其他层。");
     };
-    app.basePaint = () => floor.active ? floor.paint : state.paint;
+    app.basePaint = () => {
+      if (!floor.active) return Lab.enableSparse(state.paint);
+      Object.values(Lab.floorMaps(floor.paint, floor.roles)).forEach(Lab.enableSparse);
+      return floor.paint;
+    };
     app.paintMap = () => floor.active ? Lab.floorMaps(floor.paint, floor.roles)[floor.id] : state.paint;
     app.sceneValid = function () {
       if (!floor.active) return state.valid;
@@ -210,6 +214,12 @@
       return slots.every(([, slot]) => slot.valid);
     };
     app.drawScene = function (canvas, map, options = {}) {
+      if (map.chunks) {
+        app.saveFloorLayer();
+        return Lab.renderSparseScene(canvas, map, floor.active ? floor.slots : null,
+          { ...app.options(), ...options, roles: floor.roles, unitSize: floor.active ? floor.unitSize : state.slice.size,
+            activeLayer: floor.previewId || floor.id, solo: Boolean(floor.previewId), single: state });
+      }
       if (!floor.active) return Lab.renderMap(canvas, map, state.flatTiles, { ...app.options(), ...options });
       app.saveFloorLayer();
       return Lab.renderFloor(canvas, map, floor.slots, { ...app.options(), ...options,

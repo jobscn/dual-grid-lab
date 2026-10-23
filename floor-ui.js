@@ -30,7 +30,7 @@
         $("import-open").title = "可多选同一地形的完整16态变体图集；替换当前组";
         $("source-open").title = "图集切分与映射";
         $("source-open").setAttribute("aria-label", "图集切分与映射");
-        $("paint-hint").textContent = "滚轮缩放 · 空格拖动 · Shift / 右键擦除";
+        $("paint-hint").textContent = "自由延伸绘制 · 空格拖动 · Shift / 右键擦除";
         return;
       }
       $("floor-size").disabled = Object.values(floor.slots).some(slot => !slot.floorGenerated);
@@ -39,7 +39,7 @@
       $("source-open").setAttribute("aria-label", `${role().name}的切分与映射`);
       $("source-layer-label").textContent = `当前层：${role().name}。仅导入原生单格${floor.unitSize}px的方格16态图集；本层独立保存切分／映射与变体。`;
       $("floor-layer-note").textContent = `${role().name} · ${role().required ? "必需" : "可选"} · ${role().note} ${floor.id === "grass" ? "右侧合成时再按覆盖区域裁切；底稿不包含泥土。" : ""}`;
-      $("paint-hint").textContent = `编辑：${role().name}${floor.id === "grass" || role().shapeFrom ? "覆盖区（不改所属层）" : "独立占用"} · Shift / 右键擦除`;
+      $("paint-hint").textContent = `编辑：${role().name}${floor.id === "grass" || role().shapeFrom ? "覆盖区（不改所属层）" : "独立占用"} · 自由延伸 · Shift / 右键擦除`;
     };
     app.drawFloorTemplate = function () {
       if (!floor.active) return false;

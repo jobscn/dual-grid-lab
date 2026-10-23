@@ -1,6 +1,6 @@
 (function (Lab) {
   "use strict";
-  const format = "dual-grid-lab-state", version = 1;
+  const format = "dual-grid-lab-state", version = 2;
   const values = ["view", "filter", "zoom", "seed"];
   const checks = ["grid", "dual", "logic", "labels", "sea-preview"];
   const layerFields = ["fileName", "isDemo", "mapping", "activeVariant", "variantMode",
@@ -13,16 +13,38 @@
   const text = (value, length = 512) => typeof value === "string" && value.length <= length;
   const cellArray = (cells, length) => Array.isArray(cells) && cells.length === length &&
     cells.every(value => value === 0 || value === 1);
+  function validateGrid(data, width, height) {
+    const length = (width + 1) * (height + 1);
+    if (Array.isArray(data)) { ensure(cellArray(data, length), "试画数据不完整"); return; }
+    ensure(record(data) && cellArray(data.cells, length), "试画数据不完整");
+    if (data.chunks === undefined) return;
+    ensure(Array.isArray(data.chunks) && data.chunks.length <= 16384, "试画分块无效");
+    const keys = new Set();
+    data.chunks.forEach(chunk => {
+      ensure(Array.isArray(chunk) && chunk.length === 3 &&
+        chunk.slice(0, 2).every(value => Number.isSafeInteger(value) &&
+          Math.abs(value) < Math.floor((Number.MAX_SAFE_INTEGER - 64) / 32)) &&
+        Array.isArray(chunk[2]) && chunk[2].length > 0 && chunk[2].length <= 1024, "试画分块无效");
+      const [cx, cy, indices] = chunk, key = `${cx},${cy}`;
+      ensure(!keys.has(key) && new Set(indices).size === indices.length, "试画分块重复");
+      keys.add(key);
+      indices.forEach(index => {
+        ensure(Number.isInteger(index) && index >= 0 && index < 1024, "试画分块索引无效");
+        const x = cx * 32 + index % 32, y = cy * 32 + Math.floor(index / 32);
+        ensure(x < 0 || y < 0 || x > width || y > height, "试画分块与基准区域重叠");
+      });
+    });
+  }
   function validateMap(map) {
     ensure(record(map) && Number.isInteger(map.width) && map.width > 0 && map.width <= 128 &&
       Number.isInteger(map.height) && map.height > 0 && map.height <= 128, "试画尺寸无效");
-    ensure(cellArray(map.cells, (map.width + 1) * (map.height + 1)), "试画数据不完整");
+    validateGrid(map, map.width, map.height);
     ["title", "tag", "description"].forEach(key => ensure(text(map[key]), "试画说明无效"));
   }
   function validateView(view) {
     ensure(record(view) && typeof view.fit === "boolean" && typeof view.native === "boolean" &&
       Number.isFinite(view.zoom) && view.zoom >= 1 / 1024 && view.zoom <= 1048576 &&
-      [view.centerX, view.centerY].every(value => Number.isFinite(value) && Math.abs(value) <= 1048576),
+      [view.centerX, view.centerY].every(value => Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER / 1024),
     "画布视图无效");
   }
   function validateControls(controls, ids, $) {
@@ -38,7 +60,7 @@
         Number(controls["guide-size"]) <= 256 && /^#[\da-f]{6}$/i.test(controls["guide-color"]), "底稿设置无效");
   }
   Lab.validateSession = function (data, $) {
-    ensure(record(data) && data.format === format && data.version === version, "不支持的状态文件格式或版本");
+    ensure(record(data) && data.format === format && [1, version].includes(data.version), "不支持的状态文件格式或版本");
     const s = data.state, f = data.floor;
     ensure(record(s) && record(f) && record(data.assets), "状态数据不完整");
     validateControls(data.controls, values, $);
@@ -74,7 +96,8 @@
     ensure(!slotIds.length && !f.active || slotIds.length === ids.length && ids.every(id => slotIds.includes(id)),
       "图层素材不完整");
     ensure(record(f.maps) && Object.keys(f.maps).length === ids.length &&
-      ids.every(id => cellArray(f.maps[id], f.paint.cells.length)), "图层笔画不完整");
+      ids.every(id => Object.hasOwn(f.maps, id)), "图层笔画不完整");
+    ids.forEach(id => validateGrid(f.maps[id], f.paint.width, f.paint.height));
     const refs = new Set();
     function layer(snapshot) {
       ensure(record(snapshot) && text(snapshot.fileName) && typeof snapshot.isDemo === "boolean" &&
@@ -118,9 +141,25 @@
       record(paint.histories), "笔刷状态无效");
     Object.entries(paint.histories).forEach(([id, entries]) => {
       ensure(id === "single" || ids.includes(id), "未知笔画图层");
-      ensure(Array.isArray(entries) && entries.length <= 40 &&
-        entries.every(cells => cellArray(cells, id === "single" ? s.paint.cells.length : f.paint.cells.length)),
-      "撤销历史无效");
+      ensure(Array.isArray(entries) && entries.length <= 40, "撤销历史无效");
+      const map = id === "single" ? s.paint : f.paint;
+      entries.forEach(data => {
+        if (!record(data) || !Object.hasOwn(data, "changes")) {
+          validateGrid(data, map.width, map.height);
+          return;
+        }
+        ensure(Array.isArray(data.changes) && data.changes.length <= 1048576, "笔画差量无效");
+        const seen = new Set();
+        data.changes.forEach(change => {
+          ensure(Array.isArray(change) && change.length === 3 &&
+            change.slice(0, 2).every(value => Number.isSafeInteger(value) &&
+              Math.abs(value) < Number.MAX_SAFE_INTEGER - 32) &&
+            (change[2] === 0 || change[2] === 1), "笔画差量无效");
+          const key = `${change[0]},${change[1]}`;
+          ensure(!seen.has(key), "笔画差量重复");
+          seen.add(key);
+        });
+      });
     });
     ensure(Array.isArray(data.panes) && data.panes.length >= 1 && data.panes.length <= 5, "检查栏数量无效");
     data.panes.forEach(pane => {
@@ -166,11 +205,11 @@
     }
     function mapData(map) {
       return { width: map.width, height: map.height, title: map.title, tag: map.tag,
-        description: map.description, cells: Array.from(map.cells) };
+        description: map.description, ...Lab.gridData(map) };
     }
     function mapFrom(data) {
       const map = Lab.map(data.width, data.height, data.title, data.tag, data.description);
-      map.cells.set(data.cells);
+      Lab.restoreGrid(map, data);
       return map;
     }
     function capture() {
@@ -199,7 +238,7 @@
       single, floor: { active: floor.active, id: floor.id, previewId: floor.previewId, unitSize: floor.unitSize,
         nextId: floor.nextId, roles: floor.roles.map(role => ({ ...role })), slots,
         paint: mapData(floor.paint), maps: Object.fromEntries(Object.entries(Lab.floorMaps(floor.paint, floor.roles))
-          .map(([id, map]) => [id, Array.from(map.cells)])) },
+          .map(([id, map]) => [id, Lab.gridData(map)])) },
       workspace: { ...app.workspaceState.capture(), collapsedLayers: app.layerCardsState.capture() },
       paint: app.paintState.capture(), panes: app.previewState.capture(),
       views: { template: $("template-canvas").labViewport.snapshot(), paint: $("paint-canvas").labViewport.snapshot() },
@@ -224,7 +263,7 @@
       Object.assign(floor, data.floor, { single, slots, paint: mapFrom(data.floor.paint) });
       app.layerCardsState.restore(data.workspace.collapsedLayers || []);
       const maps = Lab.floorMaps(floor.paint, floor.roles);
-      Object.entries(data.floor.maps).forEach(([id, cells]) => maps[id].cells.set(cells));
+      Object.entries(data.floor.maps).forEach(([id, data]) => Lab.restoreGrid(maps[id], data));
       app.restoreLayerState(floor.active ? slots[floor.id] : single);
       $("workflow").value = floor.active ? "floor" : "single";
       $("corners").setAttribute("aria-pressed", String(state.corners));

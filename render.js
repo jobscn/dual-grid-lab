@@ -149,7 +149,7 @@
       canvas.style.height = `${canvas.height * scale}px`;
     }
   };
-  // Selection follows the infinite grid; painting still uses the finite map below.
+  // Convert viewport input to signed world coordinates without clamping to the reference map.
   Lab.hitGrid = function (event, canvas) {
     const rect = canvas.getBoundingClientRect(), view = canvas.labView;
     if (!view || !rect.width || !rect.height) return { inside: false };

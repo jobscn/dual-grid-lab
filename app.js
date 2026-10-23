@@ -22,12 +22,15 @@
     if (!app.sceneValid()) return;
     const canvas = Lab.canvas(1, 1);
     const size = app.floor.active ? app.floor.unitSize : state.slice.size;
-    const projection = Lab.projection(map.width, map.height, size, $("view").value);
-    if (projection.width * projection.height > 16777216) {
-      app.notify("原生场景导出超过16777216像素，请使用较小模板或原生图集尺寸；不会自动缩小作品。");
+    const bounds = map.chunks ? Lab.sparseExportBounds(map, app.floor.active ? app.floor.slots : null,
+      { roles: app.floor.roles, solo: Boolean(app.floor.previewId), activeLayer: app.floor.previewId || app.floor.id }) : null;
+    const projection = Lab.projection(bounds ? bounds.x1 - bounds.x0 : map.width,
+      bounds ? bounds.y1 - bounds.y0 : map.height, size, $("view").value);
+    if (projection.width * projection.height > 16777216 || projection.width > 32767 || projection.height > 32767) {
+      app.notify("作品范围超过PNG导出上限（16777216像素／单边32767px）；请用完整备份保留全部坐标与笔画。");
       return;
     }
-    app.drawScene(canvas, map, { size,
+    app.drawScene(canvas, map, { size, bounds,
       grid: false, dual: false, logic: false, selected: null });
     Lab.downloadCanvas(canvas, name, app.notify);
     app.notify("已请求导出当前预览PNG，遵循图层显隐与固定层预览；未包含检查网格、高亮或页面背景。");
@@ -88,6 +91,7 @@
     $("paint-export").disabled = !app.sceneValid();
     const canvas = $("paint-canvas");
     if (!app.sceneValid()) {
+      canvas.labViewport.suspendInfinite();
       canvas.width = canvas.height = 1;
       canvas.style.width = canvas.style.height = "1px";
       canvas.labViewport.update();

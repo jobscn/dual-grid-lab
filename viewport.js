@@ -8,7 +8,7 @@
     const listen = (target, name, callback, extra = {}) =>
       target.addEventListener(name, callback, { ...extra, signal: abort.signal });
     let fit = true, native = false, zoom = 1, scale = 1, centerX = .5, centerY = .5;
-    let drag = null, space = false, suppressClick = false;
+    let drag = null, space = false, suppressClick = false, infinite = null;
     const tools = document.createElement("div");
     tools.className = "viewport-tools";
     tools.setAttribute("role", "toolbar");
@@ -72,9 +72,11 @@
     }
     const out = tools.querySelector(".viewport-out"), inside = tools.querySelector(".viewport-in");
     const ratio = tools.querySelector(".viewport-scale"), home = tools.querySelector(".viewport-home");
-    const dimensions = () => ({ width: canvas.width * (canvas.labNativeScale || 1),
-      height: canvas.height * (canvas.labNativeScale || 1), w: surface.clientWidth, h: surface.clientHeight });
-    const usable = () => canvas.width > 1 && canvas.height > 1 && surface.clientWidth > 0 && surface.clientHeight > 0;
+    const dimensions = () => ({ width: infinite ? infinite.projection.width : canvas.width * (canvas.labNativeScale || 1),
+      height: infinite ? infinite.projection.height : canvas.height * (canvas.labNativeScale || 1),
+      w: surface.clientWidth, h: surface.clientHeight });
+    const usable = () => (infinite || canvas.width > 1 && canvas.height > 1) &&
+      surface.clientWidth > 0 && surface.clientHeight > 0;
     function baseline(d = dimensions()) {
       let value = Math.min((d.w - 16) / d.width, (d.h - 16) / d.height);
       if (value > 1 && canvas.classList.contains("pixelated")) value = Math.floor(value);
@@ -102,12 +104,25 @@
       scale = native ? 1 : baseline(d) * zoom;
       const width = d.width * scale, height = d.height * scale;
       // Keep at least a small portion reachable; the reset control always stays outside the image.
-      centerX = clamp(centerX, (24 - d.w / 2) / width, (d.w / 2 + width - 24) / width);
-      centerY = clamp(centerY, (24 - d.h / 2) / height, (d.h / 2 + height - 24) / height);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      canvas.style.left = `${d.w / 2 - centerX * width}px`;
-      canvas.style.top = `${d.h / 2 - centerY * height}px`;
+      if (!infinite) {
+        centerX = clamp(centerX, (24 - d.w / 2) / width, (d.w / 2 + width - 24) / width);
+        centerY = clamp(centerY, (24 - d.h / 2) / height, (d.h / 2 + height - 24) / height);
+      }
+      if (infinite) {
+        const w = Math.max(2, d.w), h = Math.max(2, d.h), p = infinite.projection;
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
+        canvas.style.left = canvas.style.top = "0px";
+        canvas.labView = { size: infinite.size, projection: {
+          width: w, height: h, a: p.a * scale, b: p.b * scale, c: p.c * scale, d: p.d * scale,
+          e: p.e * scale + d.w / 2 - centerX * width, f: p.f * scale + d.h / 2 - centerY * height } };
+      } else {
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        canvas.style.left = `${d.w / 2 - centerX * width}px`;
+        canvas.style.top = `${d.h / 2 - centerY * height}px`;
+      }
       updateGrid();
       canvas.labSelection?.update();
       const percent = zoom * 100;
@@ -144,6 +159,7 @@
       native = false;
       local();
       update();
+      if (infinite) options.onViewChange?.();
     }
     function preset(value, markLocal = false) {
       finish();
@@ -155,21 +171,34 @@
       centerX = centerY = .5;
       if (markLocal) local();
       update();
+      if (infinite) options.onViewChange?.();
     }
     const api = canvas.labViewport = {
       get space() { return space; },
       wantsPan: () => options.canPan ? options.canPan(api) : true,
       update, preset, setGrid,
+      setInfinite(map, size, view) {
+        infinite = { size, projection: Lab.projection(map.width, map.height, size, view) };
+        canvas.labNativeScale = 1;
+        update();
+      },
+      suspendInfinite() {
+        infinite = null;
+        gridState = null;
+        canvas.labView = null;
+      },
       reset: () => preset(0, true),
       copyFrom(other) {
         ({ fit, native, zoom, centerX, centerY } = other.snapshot());
         update();
+        if (infinite) options.onViewChange?.();
       },
       snapshot: () => ({ fit, native, zoom, centerX, centerY }),
       restore(snapshot) {
         ({ fit, native, zoom, centerX, centerY } = snapshot);
         // Hidden canvases keep these coordinates until their first visible draw.
         if (usable()) update();
+        if (infinite) options.onViewChange?.();
       },
       refreshCursor: cursor,
       dispose() {
@@ -217,6 +246,7 @@
       centerY = drag.centerY - dy / (d.height * scale);
       local();
       update();
+      if (infinite) options.onViewChange?.();
     }, { capture: true });
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => listen(surface, name, event => {
       if (!drag || event.pointerId !== drag.id) return;

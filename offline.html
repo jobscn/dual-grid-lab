@@ -598,7 +598,7 @@ body.example-loading::after { content: "正在载入案例素材…"; position: 
     </section>
     <section id="paint-panel" role="tabpanel" aria-labelledby="paint-tab" hidden>
       <div class="context-bar paint-heading">
-        <span id="paint-hint" class="paint-hint">滚轮缩放 · 空格拖动 · Shift / 右键擦除</span>
+        <span id="paint-hint" class="paint-hint">自由延伸绘制 · 空格拖动 · Shift / 右键擦除</span>
         <div class="paint-actions"><button id="paint-pan" class="button" aria-pressed="false">移动</button><button id="paint-pick" class="button" aria-pressed="false" title="选取工具：左键只选中，不绘制；选取对象在顶栏切换">选取</button><button id="paint-mode" class="button" aria-pressed="true">模式：绘制</button><button id="undo" class="button">撤销</button><button id="clear" class="button">清空</button><button id="paint-export" class="button">导出 PNG</button></div>
       </div>
       <div class="paint-wrap preview-surface"><canvas id="paint-canvas" aria-label="自由试画地形画布" tabindex="0"></canvas></div>
@@ -627,7 +627,7 @@ body.example-loading::after { content: "正在载入案例素材…"; position: 
           <p>等距仅支持 2:1 地面，不支持高度或越界悬挑。输入类型与预览视角独立。</p>
           <p>顶栏「选取：渲染格／逻辑格」决定单击对象，辅助线开关不改变选取模式。悬停虚线预览，单击实线锁定，再点同位置、点画布信息的×或Esc取消。选逻辑格显示半格偏移主选区及周围4个渲染格；边界不环绕，素材外按0读取。淡色四分区只表示位置贡献，不要求素材按象限独立绘制。</p>
           <p>各画布左上角显示精简选格信息，悬停信息可查看完整素材来源；点×或Esc取消选区。右上角链条按钮开启跨画布关联：点击渲染格，在当前画布、底稿和其他可见画布标出同一图层的相同状态，不区分纹理变体；点击逻辑格，底稿标出周围四格的状态切片，场景匹配中心值及左上／右上／左下／右下四格的完整组合。覆盖层还匹配实际覆盖区；素材范围外不发起关联。固定预览其他图层时不跨层关联。关闭链条保留单点选取。图集设置中的切片追踪独立，取消追踪与取消选区互不影响。</p>
-          <p>自由试画默认绘制，需点「选取」才只选不画；再点返回原笔刷。移动／选取／绘制互斥，选取时拖动仍平移，不记录笔画或撤销。试画支持 Ctrl / Cmd + Z，最多撤销40步。顶栏用小圆点与文字显示自动保存结果；「文件」提供立即保存和完整备份导出／载入。清理浏览器数据、更换浏览器或入口路径前请导出备份。所有图像只在本地处理，选区叠层不进入PNG／SVG／绘制包。</p>
+          <p>自由试画可向四周延伸，支持负坐标与分散笔画，平移后继续绘制。默认绘制，需点「选取」才只选不画；再点返回原笔刷。移动／选取／绘制互斥，选取时拖动仍平移，不记录笔画或撤销。试画支持 Ctrl / Cmd + Z，最多撤销40步。PNG包含原始区域与可见图层的扩展笔画；超出16777216像素或单边32767px时会提示，请改用完整备份保留全部作品。顶栏用小圆点与文字显示自动保存结果；「文件」提供立即保存和完整备份导出／载入。清理浏览器数据、更换浏览器或入口路径前请导出备份。所有图像只在本地处理，选区叠层不进入PNG／SVG／绘制包。</p>
           <p>检查栏点击「下一张」翻页，圆点可直接跳转。钉住会新增一栏并保留当前组，浏览栏自动下一张；最多4个钉住栏，每栏仍可独立翻页。「换一组」随机生成新种子；手动输入种子后按Enter可重现该组。换一组不影响钉住栏；素材与显示设置同步更新，窄屏可横向滚动分栏。</p>
           <p>左侧底稿常驻，可收为窄栏。右侧拼接检查与自由试画互斥，可整体隐藏；点击窄栏恢复。收起不清空钉住、种子或笔画，至少保留一侧展开。窄屏两侧展开时上下排列。</p>
           <p>各画布视图独立；顶部缩放用于统一重置全部画布。试画默认左键绘制，点「移动」后左键平移，也可按住空格或使用中键临时平移。拖动不触发选格，翻检查图会自动回正。</p>
@@ -854,6 +854,138 @@ body.example-loading::after { content: "正在载入案例素材…"; position: 
     return maps;
   };
 })(globalThis);
+
+</script>
+  <script>
+(function (Lab) {
+  "use strict";
+  const side = 32;
+  const coordinate = value => Number.isSafeInteger(value) && Math.abs(value) < Number.MAX_SAFE_INTEGER - side;
+  // Retain the small reference rectangle for legacy scenes; allocate overflow blocks only on writes.
+  Lab.enableSparse = function (map) {
+    if (!map.chunks) map.chunks = new Map();
+    return map;
+  };
+  const denseGet = Lab.get, denseSet = Lab.set;
+  Lab.beginGridEdit = function (map) {
+    const entry = { changes: [] };
+    map.edit = { entry, seen: new Set() };
+    return entry;
+  };
+  Lab.endGridEdit = map => { delete map.edit; };
+  Lab.get = function (map, x, y) {
+    if (x >= 0 && y >= 0 && x <= map.width && y <= map.height) return denseGet(map, x, y);
+    if (!map.chunks || !coordinate(x) || !coordinate(y)) return 0;
+    const cx = Math.floor(x / side), cy = Math.floor(y / side);
+    return map.chunks.get(`${cx},${cy}`)?.cells[(y - cy * side) * side + x - cx * side] || 0;
+  };
+  Lab.set = function (map, x, y, value) {
+    if (!coordinate(x) || !coordinate(y)) return;
+    const previous = Lab.get(map, x, y), next = value ? 1 : 0;
+    if (previous === next) return;
+    if (map.edit) {
+      const key = `${x},${y}`;
+      if (!map.edit.seen.has(key)) {
+        map.edit.seen.add(key);
+        map.edit.entry.changes.push([x, y, previous]);
+      }
+    }
+    if (x >= 0 && y >= 0 && x <= map.width && y <= map.height) return denseSet(map, x, y, value);
+    if (!map.chunks) return;
+    const cx = Math.floor(x / side), cy = Math.floor(y / side), key = `${cx},${cy}`;
+    let chunk = map.chunks.get(key);
+    if (!chunk) {
+      if (!value) return;
+      chunk = { x: cx, y: cy, count: 0, cells: new Uint8Array(side * side), occupied: new Set() };
+      map.chunks.set(key, chunk);
+    }
+    const index = (y - cy * side) * side + x - cx * side;
+    chunk.count += next - chunk.cells[index];
+    chunk.cells[index] = next;
+    if (next) chunk.occupied.add(index);
+    else chunk.occupied.delete(index);
+    chunk.tiles = chunk.logicTiles = null;
+    if (!chunk.count) map.chunks.delete(key);
+  };
+  Lab.gridData = map => ({ cells: Array.from(map.cells),
+    chunks: Array.from(map.chunks?.values() || [], chunk => [chunk.x, chunk.y,
+      Array.from(chunk.occupied)]) });
+  Lab.restoreGrid = function (map, data) {
+    map.cells.set(Array.isArray(data) ? data : data.cells);
+    Lab.enableSparse(map).chunks.clear();
+    for (const [cx, cy, indices] of data.chunks || [])
+      for (const index of indices) Lab.set(map, cx * side + index % side, cy * side + Math.floor(index / side), 1);
+  };
+  Lab.clearGrid = function (map) { map.cells.fill(0); map.chunks?.clear(); };
+  Lab.undoGrid = function (map, entry) {
+    if (Array.isArray(entry.changes)) entry.changes.forEach(([x, y, value]) => Lab.set(map, x, y, value));
+    else Lab.restoreGrid(map, entry);
+  };
+  Lab.copyGrid = function (target, source) {
+    target.cells.set(source.cells);
+    if (source.chunks) Lab.restoreGrid(target, Lab.gridData(source));
+  };
+  Lab.eachSample = function (map, visit, bounds) {
+    const accepts = (x, y) => !bounds || x >= bounds.x0 && x <= bounds.x1 && y >= bounds.y0 && y <= bounds.y1;
+    for (let y = 0; y <= map.height; y++)
+      for (let x = 0; x <= map.width; x++) if (denseGet(map, x, y) && accepts(x, y)) visit(x, y);
+    for (const chunk of map.chunks?.values() || []) {
+      const x0 = chunk.x * side, y0 = chunk.y * side;
+      if (bounds && (x0 > bounds.x1 || y0 > bounds.y1 || x0 + side <= bounds.x0 || y0 + side <= bounds.y0)) continue;
+      for (const index of chunk.occupied) {
+        const x = x0 + index % side, y = y0 + Math.floor(index / side);
+        if (accepts(x, y)) visit(x, y);
+      }
+    }
+  };
+  function chunkTiles(chunk, logic) {
+    const field = logic ? "logicTiles" : "tiles";
+    if (chunk[field]) return chunk[field];
+    const stride = side + (logic ? 2 : 1), marked = new Uint8Array(stride * stride);
+    for (const index of chunk.occupied) {
+      const x = index % side, y = Math.floor(index / side);
+      for (let dy = 0; dy <= (logic ? 2 : 1); dy++)
+        for (let dx = 0; dx <= (logic ? 2 : 1); dx++) marked[(y + dy) * stride + x + dx] = 1;
+    }
+    const indices = [];
+    for (let i = 0; i < marked.length; i++) if (marked[i]) indices.push(i);
+    return chunk[field] = Uint16Array.from(indices);
+  }
+  // Visit existing tiles and their one-sample halo; distance between islands costs no memory.
+  Lab.eachGridTile = function (map, visit, bounds, logic = false) {
+    const seen = new Set();
+    const add = (x, y) => {
+      if (bounds && (x < bounds.x0 || y < bounds.y0 || x > bounds.x1 || y > bounds.y1)) return;
+      const key = `${x},${y}`;
+      if (!seen.has(key)) { seen.add(key); visit(x, y); }
+    };
+    for (let y = 0; y < map.height + Number(logic); y++)
+      for (let x = 0; x < map.width + Number(logic); x++) add(x, y);
+    if (!map.chunks) return;
+    const samples = bounds && { x0: bounds.x0 - 1, y0: bounds.y0 - 1, x1: bounds.x1 + 2, y1: bounds.y1 + 2 };
+    Lab.eachSample({ width: map.width, height: map.height, cells: map.cells }, (x, y) => {
+      for (let dy = -1; dy <= Number(logic); dy++)
+        for (let dx = -1; dx <= Number(logic); dx++) add(x + dx, y + dy);
+    }, samples);
+    const stride = side + (logic ? 2 : 1);
+    for (const chunk of map.chunks.values()) {
+      const x0 = chunk.x * side - 1, y0 = chunk.y * side - 1;
+      if (bounds && (x0 > bounds.x1 || y0 > bounds.y1 ||
+          x0 + stride <= bounds.x0 || y0 + stride <= bounds.y0)) continue;
+      for (const index of chunkTiles(chunk, logic)) add(x0 + index % stride, y0 + Math.floor(index / stride));
+    }
+  };
+  Lab.gridBounds = function (maps) {
+    const bounds = { x0: 0, y0: 0, x1: maps[0].width, y1: maps[0].height };
+    maps.forEach(map => Lab.eachSample(map, (x, y) => {
+      bounds.x0 = Math.min(bounds.x0, x - 1); bounds.y0 = Math.min(bounds.y0, y - 1);
+      bounds.x1 = Math.max(bounds.x1, x + 1); bounds.y1 = Math.max(bounds.y1, y + 1);
+    }));
+    return bounds;
+  };
+  Lab.gridInside = (map, x, y, logic = false) => Boolean(map.chunks) ||
+    x >= 0 && y >= 0 && x < map.width + Number(logic) && y < map.height + Number(logic);
+})(globalThis.DualGridLab);
 
 </script>
   <script>
@@ -1389,7 +1521,7 @@ ${layers.join("\n")}
       canvas.style.height = `${canvas.height * scale}px`;
     }
   };
-  // Selection follows the infinite grid; painting still uses the finite map below.
+  // Convert viewport input to signed world coordinates without clamping to the reference map.
   Lab.hitGrid = function (event, canvas) {
     const rect = canvas.getBoundingClientRect(), view = canvas.labView;
     if (!view || !rect.width || !rect.height) return { inside: false };
@@ -1412,6 +1544,130 @@ ${layers.join("\n")}
       y: Math.min(map.height - 1, Math.max(0, point.y)),
       sampleX: Math.min(map.width, Math.max(0, point.sampleX)),
       sampleY: Math.min(map.height, Math.max(0, point.sampleY)) };
+  };
+})(globalThis.DualGridLab);
+
+</script>
+  <script>
+(function (Lab) {
+  "use strict";
+  const cache = new WeakMap(), clips = new Map(), cropped = new Map(), tileIds = new WeakMap();
+  let nextTileId = 0, croppedPixels = 0;
+  function tileImage(tile, view, filter) {
+    let variants = cache.get(tile);
+    if (!variants) { variants = new Map(); cache.set(tile, variants); }
+    const key = `${view}/${filter}`;
+    if (!variants.has(key)) variants.set(key, view === "iso" ?
+      Lab.sampledTile(tile, tile.width * 2, tile.height, filter, "diamond") : tile);
+    return variants.get(key);
+  }
+  function coverageTile(mask, size, view) {
+    const key = `${mask}/${size}/${view}`;
+    if (!clips.has(key)) {
+      const raster = Lab.pixelCanvas({ width: size, height: size,
+        data: Lab.pixelTile(mask, size, { connected: true }) }, "#ffffff");
+      clips.set(key, tileImage(raster, view, "nearest"));
+      if (clips.size > 128) clips.delete(clips.keys().next().value);
+    }
+    return clips.get(key);
+  }
+  function coveredImage(tile, mask, size, view) {
+    if (mask === 15) return tile;
+    if (!tileIds.has(tile)) tileIds.set(tile, ++nextTileId);
+    const key = `${tileIds.get(tile)}/${mask}/${size}/${view}`;
+    if (cropped.has(key)) return cropped.get(key);
+    const width = view === "iso" ? size * 2 : size, result = Lab.canvas(width, size);
+    const ctx = result.getContext("2d");
+    ctx.drawImage(tile, 0, 0, width, size);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.drawImage(coverageTile(mask, size, view), 0, 0, width, size);
+    ctx.globalCompositeOperation = "source-over";
+    cropped.set(key, result);
+    croppedPixels += width * size;
+    while (cropped.size > 256 || croppedPixels > 4194304) {
+      const first = cropped.keys().next().value, image = cropped.get(first);
+      croppedPixels -= image.width * image.height;
+      cropped.delete(first);
+    }
+    return result;
+  }
+  Lab.sparseExportBounds = function (map, layers, options) {
+    const maps = layers ? Lab.floorMaps(map, options.roles) : { single: map };
+    const visible = layers ? options.roles.filter(role => options.solo ? role.id === options.activeLayer :
+      layers[role.id]?.enabled).map(role => maps[role.shapeFrom || (role.id === "grass" ? "terrain" : role.id)]) : [map];
+    return Lab.gridBounds(visible.length ? visible : [map]);
+  };
+  Lab.renderSparseScene = function (canvas, map, layers, options) {
+    const size = options.unitSize, view = options.view || "ortho", filter = options.filter || "nearest";
+    const maps = layers ? Lab.floorMaps(map, options.roles) : { single: map };
+    if (canvas.labViewport) canvas.labViewport.setInfinite(map, size, view);
+    else {
+      const b = options.bounds || Lab.sparseExportBounds(map, layers, options);
+      const p = Lab.projection(b.x1 - b.x0, b.y1 - b.y0, size, view);
+      p.e -= (p.a * b.x0 + p.c * b.y0) * size;
+      p.f -= (p.b * b.x0 + p.d * b.y0) * size;
+      canvas.width = p.width; canvas.height = p.height;
+      canvas.labView = { projection: p, size };
+    }
+    const p = canvas.labView.projection, ctx = canvas.getContext("2d");
+    ctx.resetTransform(); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const corners = [[0, 0], [canvas.width, 0], [0, canvas.height], [canvas.width, canvas.height]]
+      .map(([x, y]) => Lab.inversePoint(x, y, p));
+    const bounds = { x0: Math.floor(Math.min(...corners.map(v => v.x)) / size) - 1,
+      y0: Math.floor(Math.min(...corners.map(v => v.y)) / size) - 1,
+      x1: Math.ceil(Math.max(...corners.map(v => v.x)) / size) + 1,
+      y1: Math.ceil(Math.max(...corners.map(v => v.y)) / size) + 1 };
+    if (options.bounds && !canvas.labViewport) {
+      bounds.x0 = Math.max(bounds.x0, options.bounds.x0);
+      bounds.y0 = Math.max(bounds.y0, options.bounds.y0);
+      bounds.x1 = Math.min(bounds.x1, options.bounds.x1 - 1);
+      bounds.y1 = Math.min(bounds.y1, options.bounds.y1 - 1);
+    }
+    const roles = layers ? options.roles.slice().sort((a, b) => a.order - b.order) : [{ id: "single" }];
+    for (const role of roles) {
+      const layer = layers ? layers[role.id] : options.single;
+      if (!layer?.valid || layers && (options.solo ? role.id !== options.activeLayer : !layer.enabled)) continue;
+      const shapeFrom = role.id === "grass" ? "terrain" : role.shapeFrom;
+      const shape = maps[shapeFrom || role.id], region = maps[role.id];
+      const packs = layer.variantMode === "mixed" ? layer.variantPacks : [layer];
+      Lab.eachGridTile(shape, (x, y) => {
+        const mask = Lab.mask(shape, x, y);
+        // Infinite empty space has no atlas pixels; the original reference rectangle is preserved.
+        if (!mask && (x < 0 || y < 0 || x >= map.width || y >= map.height)) return;
+        const pack = packs[Lab.variantIndex(x, y, packs.length, layer.variantSeed)];
+        const directIso = view === "iso" && !layers && options.geometry !== "square";
+        const tile = directIso ? pack.tiles[mask] : tileImage(pack.flatTiles[mask], view, filter);
+        const point = Lab.projectPoint(x * size, y * size, p);
+        const scale = Math.hypot(p.a, p.c) / (view === "iso" ? Math.SQRT2 : 1);
+        const width = size * (view === "iso" ? 2 : 1), left = view === "iso" ? point.x - size * scale : point.x;
+        let image = tile;
+        if (shapeFrom) {
+          const clipMask = Lab.mask(region, x, y);
+          if (!clipMask) return;
+          image = coveredImage(tile, clipMask, size, view);
+        }
+        ctx.imageSmoothingEnabled = filter === "bilinear";
+        ctx.drawImage(image, left, point.y, width * scale, size * scale);
+        if (options.selected === mask && (!layers || role.id === options.activeLayer)) {
+          ctx.save(); Lab.applyProjection(ctx, p);
+          ctx.fillStyle = "#ed5c2930"; ctx.fillRect(x * size, y * size, size, size); ctx.restore();
+        }
+      }, bounds);
+    }
+    if (options.logic) {
+      const active = maps[options.activeLayer] || map;
+      const spacing = size * Math.hypot(p.a, p.b), step = Math.max(1, 2 ** Math.ceil(Math.log2(6 / spacing)));
+      ctx.fillStyle = "#5e7970";
+      for (let y = Math.ceil(bounds.y0 / step) * step; y <= bounds.y1; y += step)
+        for (let x = Math.ceil(bounds.x0 / step) * step; x <= bounds.x1; x += step) {
+          const at = Lab.projectPoint(x * size, y * size, p);
+          ctx.fillStyle = Lab.get(active, x, y) ? "#426f6a" : "#fffdf6";
+          ctx.fillRect(Math.round(at.x) - 1, Math.round(at.y) - 1, 2, 2);
+        }
+    }
+    canvas.labViewport?.setGrid(map, size, options);
+    Lab.setFilter(canvas, filter);
+    return size;
   };
 })(globalThis.DualGridLab);
 
@@ -1501,7 +1757,7 @@ ${layers.join("\n")}
     const listen = (target, name, callback, extra = {}) =>
       target.addEventListener(name, callback, { ...extra, signal: abort.signal });
     let fit = true, native = false, zoom = 1, scale = 1, centerX = .5, centerY = .5;
-    let drag = null, space = false, suppressClick = false;
+    let drag = null, space = false, suppressClick = false, infinite = null;
     const tools = document.createElement("div");
     tools.className = "viewport-tools";
     tools.setAttribute("role", "toolbar");
@@ -1565,9 +1821,11 @@ ${layers.join("\n")}
     }
     const out = tools.querySelector(".viewport-out"), inside = tools.querySelector(".viewport-in");
     const ratio = tools.querySelector(".viewport-scale"), home = tools.querySelector(".viewport-home");
-    const dimensions = () => ({ width: canvas.width * (canvas.labNativeScale || 1),
-      height: canvas.height * (canvas.labNativeScale || 1), w: surface.clientWidth, h: surface.clientHeight });
-    const usable = () => canvas.width > 1 && canvas.height > 1 && surface.clientWidth > 0 && surface.clientHeight > 0;
+    const dimensions = () => ({ width: infinite ? infinite.projection.width : canvas.width * (canvas.labNativeScale || 1),
+      height: infinite ? infinite.projection.height : canvas.height * (canvas.labNativeScale || 1),
+      w: surface.clientWidth, h: surface.clientHeight });
+    const usable = () => (infinite || canvas.width > 1 && canvas.height > 1) &&
+      surface.clientWidth > 0 && surface.clientHeight > 0;
     function baseline(d = dimensions()) {
       let value = Math.min((d.w - 16) / d.width, (d.h - 16) / d.height);
       if (value > 1 && canvas.classList.contains("pixelated")) value = Math.floor(value);
@@ -1595,12 +1853,25 @@ ${layers.join("\n")}
       scale = native ? 1 : baseline(d) * zoom;
       const width = d.width * scale, height = d.height * scale;
       // Keep at least a small portion reachable; the reset control always stays outside the image.
-      centerX = clamp(centerX, (24 - d.w / 2) / width, (d.w / 2 + width - 24) / width);
-      centerY = clamp(centerY, (24 - d.h / 2) / height, (d.h / 2 + height - 24) / height);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      canvas.style.left = `${d.w / 2 - centerX * width}px`;
-      canvas.style.top = `${d.h / 2 - centerY * height}px`;
+      if (!infinite) {
+        centerX = clamp(centerX, (24 - d.w / 2) / width, (d.w / 2 + width - 24) / width);
+        centerY = clamp(centerY, (24 - d.h / 2) / height, (d.h / 2 + height - 24) / height);
+      }
+      if (infinite) {
+        const w = Math.max(2, d.w), h = Math.max(2, d.h), p = infinite.projection;
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
+        canvas.style.left = canvas.style.top = "0px";
+        canvas.labView = { size: infinite.size, projection: {
+          width: w, height: h, a: p.a * scale, b: p.b * scale, c: p.c * scale, d: p.d * scale,
+          e: p.e * scale + d.w / 2 - centerX * width, f: p.f * scale + d.h / 2 - centerY * height } };
+      } else {
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        canvas.style.left = `${d.w / 2 - centerX * width}px`;
+        canvas.style.top = `${d.h / 2 - centerY * height}px`;
+      }
       updateGrid();
       canvas.labSelection?.update();
       const percent = zoom * 100;
@@ -1637,6 +1908,7 @@ ${layers.join("\n")}
       native = false;
       local();
       update();
+      if (infinite) options.onViewChange?.();
     }
     function preset(value, markLocal = false) {
       finish();
@@ -1648,21 +1920,34 @@ ${layers.join("\n")}
       centerX = centerY = .5;
       if (markLocal) local();
       update();
+      if (infinite) options.onViewChange?.();
     }
     const api = canvas.labViewport = {
       get space() { return space; },
       wantsPan: () => options.canPan ? options.canPan(api) : true,
       update, preset, setGrid,
+      setInfinite(map, size, view) {
+        infinite = { size, projection: Lab.projection(map.width, map.height, size, view) };
+        canvas.labNativeScale = 1;
+        update();
+      },
+      suspendInfinite() {
+        infinite = null;
+        gridState = null;
+        canvas.labView = null;
+      },
       reset: () => preset(0, true),
       copyFrom(other) {
         ({ fit, native, zoom, centerX, centerY } = other.snapshot());
         update();
+        if (infinite) options.onViewChange?.();
       },
       snapshot: () => ({ fit, native, zoom, centerX, centerY }),
       restore(snapshot) {
         ({ fit, native, zoom, centerX, centerY } = snapshot);
         // Hidden canvases keep these coordinates until their first visible draw.
         if (usable()) update();
+        if (infinite) options.onViewChange?.();
       },
       refreshCursor: cursor,
       dispose() {
@@ -1710,6 +1995,7 @@ ${layers.join("\n")}
       centerY = drag.centerY - dy / (d.height * scale);
       local();
       update();
+      if (infinite) options.onViewChange?.();
     }, { capture: true });
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => listen(surface, name, event => {
       if (!drag || event.pointerId !== drag.id) return;
@@ -1859,7 +2145,7 @@ ${layers.join("\n")}
     const index = !context.template && slot.variantMode === "mixed" ?
       Lab.variantIndex(tile.x, tile.y, packs.length, slot.variantSeed) : slot.activeVariant;
     const pack = packs[index], rect = Lab.sourceRect(slot.slice, slot.mapping.indexOf(mask));
-    const outside = tile.x < 0 || tile.y < 0 || tile.x >= context.map.width || tile.y >= context.map.height;
+    const outside = !Lab.gridInside(context.map, tile.x, tile.y);
     // Generated guide comparison is not a crop from the imported source.
     const reference = context.template && app.state.compareGuide;
     return { ...tile, mask, region, context, index, rect, reference, outside,
@@ -1871,7 +2157,7 @@ ${layers.join("\n")}
     if (selection.kind === "logic") {
       const value = Lab.get(context.map, x, y);
       return `${context.label} · L(${x}, ${y}) = ${value} · 关联4个渲染格` +
-        (x < 0 || y < 0 || x > context.map.width || y > context.map.height ? " · 素材范围外，逻辑值为0" : "") +
+        (!Lab.gridInside(context.map, x, y, true) ? " · 素材范围外，逻辑值为0" : "") +
         (context.coverage ? " · 覆盖区用于裁切；选图使用所属层四角" : "");
     }
     const tile = Lab.selectionTileInfo(app, selection, { x, y });
@@ -1934,8 +2220,7 @@ ${layers.join("\n")}
   <script>
 (function (Lab) {
   "use strict";
-  const inside = (map, x, y, logic = false) =>
-    x >= 0 && y >= 0 && x < map.width + Number(logic) && y < map.height + Number(logic);
+  const inside = Lab.gridInside;
   const masks = (map, selection) => Lab.selectionTiles({ ...selection, kind: "logic" })
     .map(tile => inside(map, tile.x, tile.y) ? Lab.mask(map, tile.x, tile.y) : -1);
   Lab.selectionLinkPattern = function (context, selection) {
@@ -1953,23 +2238,22 @@ ${layers.join("\n")}
     if (to.template || source.kind === "render") {
       result.kind = "render";
       const region = Lab.mask(from.map, source.x, source.y);
-      for (let y = 0; y < to.map.height; y++)
-        for (let x = 0; x < to.map.width; x++)
-          if (result.masks.includes(Lab.mask(to.shape, x, y)) &&
-              (to.template || from.template || !from.coverage || Lab.mask(to.map, x, y) === region))
-            result.matches.push({ x, y });
+      Lab.eachGridTile(to.shape, (x, y) => {
+        if (result.masks.includes(Lab.mask(to.shape, x, y)) &&
+            (to.template || from.template || !from.coverage || Lab.mask(to.map, x, y) === region))
+          result.matches.push({ x, y });
+      });
       return result;
     }
     const pattern = Lab.selectionLinkPattern(from, source);
     const coverage = from.coverage && !from.template ? Lab.selectionLinkPattern({ shape: from.map }, source) : null;
-    for (let y = 0; y <= to.map.height; y++)
-      for (let x = 0; x <= to.map.width; x++) {
-        const candidate = { x, y };
-        if (!Lab.selectionLinkPattern(to, candidate).every((value, index) => value === pattern[index])) continue;
-        if (coverage && !Lab.selectionLinkPattern({ shape: to.map }, candidate)
-          .every((value, index) => value === coverage[index])) continue;
-        result.matches.push(candidate);
-      }
+    Lab.eachGridTile(to.shape, (x, y) => {
+      const candidate = { x, y };
+      if (!Lab.selectionLinkPattern(to, candidate).every((value, index) => value === pattern[index])) return;
+      if (coverage && !Lab.selectionLinkPattern({ shape: to.map }, candidate)
+        .every((value, index) => value === coverage[index])) return;
+      result.matches.push(candidate);
+    }, null, true);
     return result;
   };
 })(globalThis.DualGridLab);
@@ -2445,13 +2729,14 @@ ${relief}
     function finishStroke() {
       if (!stroke) return;
       const id = stroke.pointerId;
+      Lab.endGridEdit(stroke.map);
       stroke = null;
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     }
     app.finishPaintStroke = finishStroke;
     app.syncPaintHistory = () => $("undo").disabled = history().length === 0;
     const viewport = Lab.bindViewport(canvas, { label: "自由试画", canPan: view => moveMode || selectMode || view.space,
-      onNavigate: finishStroke });
+      onNavigate: finishStroke, onViewChange: app.schedule });
     app.bindSelection(canvas, () => app.basePaint(), () => selectMode && app.sceneValid(), () => app.sceneValid());
     function setTool(tool) {
       finishStroke();
@@ -2466,9 +2751,9 @@ ${relief}
     }
     $("paint-pan").addEventListener("click", () => setTool(moveMode ? "draw" : "move"));
     $("paint-pick").addEventListener("click", () => setTool(selectMode ? "draw" : "select"));
-    const remember = () => {
+    const remember = (delta = false) => {
       const entries = history();
-      entries.push(app.paintMap().cells.slice());
+      entries.push(delta ? Lab.beginGridEdit(app.paintMap()) : Lab.gridData(app.paintMap()));
       if (entries.length > 40) entries.shift();
       $("undo").disabled = false;
     };
@@ -2488,7 +2773,7 @@ ${relief}
     function paint(event) {
       if (!stroke || stroke.pointerId !== event.pointerId || viewport.wantsPan()) return;
       const map = stroke.map;
-      const hit = Lab.hit(event, canvas, map);
+      const hit = Lab.hitGrid(event, canvas);
       if (!hit.inside) { stroke.last = null; return; }
       const point = { x: hit.sampleX, y: hit.sampleY };
       drawLine(stroke.last || point, point, stroke.value, map);
@@ -2497,11 +2782,12 @@ ${relief}
     }
     canvas.addEventListener("pointerdown", event => {
       if (!app.state.valid || selectMode || stroke || viewport.wantsPan() || (event.button !== 0 && event.button !== 2)) return;
+      app.basePaint();
       const map = app.paintMap();
-      if (!Lab.hit(event, canvas, map).inside) return;
+      if (!Lab.hitGrid(event, canvas).inside) return;
       event.preventDefault();
       canvas.focus({ preventScroll: true });
-      remember();
+      remember(true);
       stroke = { pointerId: event.pointerId, map, value: eraser || event.shiftKey || event.button === 2 ? 0 : 1 };
       canvas.setPointerCapture(event.pointerId);
       paint(event);
@@ -2510,7 +2796,7 @@ ${relief}
       paint(event);
     });
     function end(event) {
-      if (stroke && stroke.pointerId === event.pointerId) stroke = null;
+      if (stroke && stroke.pointerId === event.pointerId) finishStroke();
     }
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => canvas.addEventListener(name, end));
     canvas.addEventListener("contextmenu", event => event.preventDefault());
@@ -2522,7 +2808,7 @@ ${relief}
     function undo() {
       const entries = history();
       if (!entries.length || stroke) return;
-      app.paintMap().cells.set(entries.pop());
+      Lab.undoGrid(app.paintMap(), entries.pop());
       $("undo").disabled = entries.length === 0;
       app.schedule();
     }
@@ -2537,7 +2823,7 @@ ${relief}
     $("clear").addEventListener("click", () => {
       finishStroke();
       remember();
-      app.paintMap().cells.fill(0);
+      Lab.clearGrid(app.paintMap());
       app.schedule();
     });
     $("paint-export").addEventListener("click", () => app.exportMap(app.basePaint(), "dual-grid-freepaint.png"));
@@ -2546,7 +2832,7 @@ ${relief}
         const maps = { single: app.state.paint, ...Lab.floorMaps(app.floor.paint, app.floor.roles) };
         return { eraser, tool: moveMode ? "move" : selectMode ? "select" : "draw",
           histories: Object.fromEntries(Object.entries(maps).map(([id, map]) =>
-            [id, (histories.get(map) || []).map(cells => Array.from(cells))])) };
+            [id, (histories.get(map) || []).slice()])) };
       },
       restore(snapshot) {
         eraser = snapshot.eraser;
@@ -2554,7 +2840,7 @@ ${relief}
         setTool(snapshot.tool);
         const maps = { single: app.state.paint, ...Lab.floorMaps(app.floor.paint, app.floor.roles) };
         Object.entries(maps).forEach(([id, map]) =>
-          histories.set(map, (snapshot.histories[id] || []).map(cells => Uint8Array.from(cells))));
+          histories.set(map, (snapshot.histories[id] || []).slice()));
         app.syncPaintHistory();
       }
     };
@@ -3199,7 +3485,8 @@ ${relief}
         const layer = result[role.id] = Lab.map(map.width, map.height, role.name, "", "");
         // Inspection scenes exercise the atlas; the editable paint map is cleared at layer creation.
         if (role.shapeFrom) layer.cells.fill(1);
-        else layer.cells.set(map.cells);
+        else Lab.copyGrid(layer, map);
+        if (map.chunks) Lab.enableSparse(layer);
       }
       for (const id of Object.keys(result))
         if (!["terrain", "wall", "grass"].includes(id) && !roles.some(role => role.id === id)) delete result[id];
@@ -3207,9 +3494,10 @@ ${relief}
     }
     const wall = Lab.map(map.width, map.height, "背景墙", "", "");
     const cover = Lab.map(map.width, map.height, "草皮覆盖区域", "", "");
-    wall.cells.set(map.cells);
+    Lab.copyGrid(wall, map);
     cover.cells.fill(1);
     const result = { terrain: map, wall, grass: cover };
+    if (map.chunks) Object.values(result).forEach(Lab.enableSparse);
     auxiliary.set(map, result);
     return Lab.floorMaps(map, roles);
   };
@@ -3556,7 +3844,7 @@ ${relief}
       floor.roles = ordered;
       ordered.forEach((item, index) => item.order = index);
       floor.slots[id] = { ...create(role), enabled: true };
-      Lab.floorMaps(floor.paint, floor.roles)[id].cells.fill(0);
+      Lab.clearGrid(Lab.floorMaps(floor.paint, floor.roles)[id]);
       floor.id = id;
       restore(floor.slots[id]);
       app.rebuild();
@@ -3627,7 +3915,11 @@ ${relief}
       $("source-panel").close();
       app.notify("已载入当前层的3套原创变体；没有混入其他层。");
     };
-    app.basePaint = () => floor.active ? floor.paint : state.paint;
+    app.basePaint = () => {
+      if (!floor.active) return Lab.enableSparse(state.paint);
+      Object.values(Lab.floorMaps(floor.paint, floor.roles)).forEach(Lab.enableSparse);
+      return floor.paint;
+    };
     app.paintMap = () => floor.active ? Lab.floorMaps(floor.paint, floor.roles)[floor.id] : state.paint;
     app.sceneValid = function () {
       if (!floor.active) return state.valid;
@@ -3637,6 +3929,12 @@ ${relief}
       return slots.every(([, slot]) => slot.valid);
     };
     app.drawScene = function (canvas, map, options = {}) {
+      if (map.chunks) {
+        app.saveFloorLayer();
+        return Lab.renderSparseScene(canvas, map, floor.active ? floor.slots : null,
+          { ...app.options(), ...options, roles: floor.roles, unitSize: floor.active ? floor.unitSize : state.slice.size,
+            activeLayer: floor.previewId || floor.id, solo: Boolean(floor.previewId), single: state });
+      }
       if (!floor.active) return Lab.renderMap(canvas, map, state.flatTiles, { ...app.options(), ...options });
       app.saveFloorLayer();
       return Lab.renderFloor(canvas, map, floor.slots, { ...app.options(), ...options,
@@ -4097,7 +4395,7 @@ ${relief}
         $("import-open").title = "可多选同一地形的完整16态变体图集；替换当前组";
         $("source-open").title = "图集切分与映射";
         $("source-open").setAttribute("aria-label", "图集切分与映射");
-        $("paint-hint").textContent = "滚轮缩放 · 空格拖动 · Shift / 右键擦除";
+        $("paint-hint").textContent = "自由延伸绘制 · 空格拖动 · Shift / 右键擦除";
         return;
       }
       $("floor-size").disabled = Object.values(floor.slots).some(slot => !slot.floorGenerated);
@@ -4106,7 +4404,7 @@ ${relief}
       $("source-open").setAttribute("aria-label", `${role().name}的切分与映射`);
       $("source-layer-label").textContent = `当前层：${role().name}。仅导入原生单格${floor.unitSize}px的方格16态图集；本层独立保存切分／映射与变体。`;
       $("floor-layer-note").textContent = `${role().name} · ${role().required ? "必需" : "可选"} · ${role().note} ${floor.id === "grass" ? "右侧合成时再按覆盖区域裁切；底稿不包含泥土。" : ""}`;
-      $("paint-hint").textContent = `编辑：${role().name}${floor.id === "grass" || role().shapeFrom ? "覆盖区（不改所属层）" : "独立占用"} · Shift / 右键擦除`;
+      $("paint-hint").textContent = `编辑：${role().name}${floor.id === "grass" || role().shapeFrom ? "覆盖区（不改所属层）" : "独立占用"} · 自由延伸 · Shift / 右键擦除`;
     };
     app.drawFloorTemplate = function () {
       if (!floor.active) return false;
@@ -4180,7 +4478,7 @@ ${relief}
   <script>
 (function (Lab) {
   "use strict";
-  const format = "dual-grid-lab-state", version = 1;
+  const format = "dual-grid-lab-state", version = 2;
   const values = ["view", "filter", "zoom", "seed"];
   const checks = ["grid", "dual", "logic", "labels", "sea-preview"];
   const layerFields = ["fileName", "isDemo", "mapping", "activeVariant", "variantMode",
@@ -4193,16 +4491,38 @@ ${relief}
   const text = (value, length = 512) => typeof value === "string" && value.length <= length;
   const cellArray = (cells, length) => Array.isArray(cells) && cells.length === length &&
     cells.every(value => value === 0 || value === 1);
+  function validateGrid(data, width, height) {
+    const length = (width + 1) * (height + 1);
+    if (Array.isArray(data)) { ensure(cellArray(data, length), "试画数据不完整"); return; }
+    ensure(record(data) && cellArray(data.cells, length), "试画数据不完整");
+    if (data.chunks === undefined) return;
+    ensure(Array.isArray(data.chunks) && data.chunks.length <= 16384, "试画分块无效");
+    const keys = new Set();
+    data.chunks.forEach(chunk => {
+      ensure(Array.isArray(chunk) && chunk.length === 3 &&
+        chunk.slice(0, 2).every(value => Number.isSafeInteger(value) &&
+          Math.abs(value) < Math.floor((Number.MAX_SAFE_INTEGER - 64) / 32)) &&
+        Array.isArray(chunk[2]) && chunk[2].length > 0 && chunk[2].length <= 1024, "试画分块无效");
+      const [cx, cy, indices] = chunk, key = `${cx},${cy}`;
+      ensure(!keys.has(key) && new Set(indices).size === indices.length, "试画分块重复");
+      keys.add(key);
+      indices.forEach(index => {
+        ensure(Number.isInteger(index) && index >= 0 && index < 1024, "试画分块索引无效");
+        const x = cx * 32 + index % 32, y = cy * 32 + Math.floor(index / 32);
+        ensure(x < 0 || y < 0 || x > width || y > height, "试画分块与基准区域重叠");
+      });
+    });
+  }
   function validateMap(map) {
     ensure(record(map) && Number.isInteger(map.width) && map.width > 0 && map.width <= 128 &&
       Number.isInteger(map.height) && map.height > 0 && map.height <= 128, "试画尺寸无效");
-    ensure(cellArray(map.cells, (map.width + 1) * (map.height + 1)), "试画数据不完整");
+    validateGrid(map, map.width, map.height);
     ["title", "tag", "description"].forEach(key => ensure(text(map[key]), "试画说明无效"));
   }
   function validateView(view) {
     ensure(record(view) && typeof view.fit === "boolean" && typeof view.native === "boolean" &&
       Number.isFinite(view.zoom) && view.zoom >= 1 / 1024 && view.zoom <= 1048576 &&
-      [view.centerX, view.centerY].every(value => Number.isFinite(value) && Math.abs(value) <= 1048576),
+      [view.centerX, view.centerY].every(value => Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER / 1024),
     "画布视图无效");
   }
   function validateControls(controls, ids, $) {
@@ -4218,7 +4538,7 @@ ${relief}
         Number(controls["guide-size"]) <= 256 && /^#[\da-f]{6}$/i.test(controls["guide-color"]), "底稿设置无效");
   }
   Lab.validateSession = function (data, $) {
-    ensure(record(data) && data.format === format && data.version === version, "不支持的状态文件格式或版本");
+    ensure(record(data) && data.format === format && [1, version].includes(data.version), "不支持的状态文件格式或版本");
     const s = data.state, f = data.floor;
     ensure(record(s) && record(f) && record(data.assets), "状态数据不完整");
     validateControls(data.controls, values, $);
@@ -4254,7 +4574,8 @@ ${relief}
     ensure(!slotIds.length && !f.active || slotIds.length === ids.length && ids.every(id => slotIds.includes(id)),
       "图层素材不完整");
     ensure(record(f.maps) && Object.keys(f.maps).length === ids.length &&
-      ids.every(id => cellArray(f.maps[id], f.paint.cells.length)), "图层笔画不完整");
+      ids.every(id => Object.hasOwn(f.maps, id)), "图层笔画不完整");
+    ids.forEach(id => validateGrid(f.maps[id], f.paint.width, f.paint.height));
     const refs = new Set();
     function layer(snapshot) {
       ensure(record(snapshot) && text(snapshot.fileName) && typeof snapshot.isDemo === "boolean" &&
@@ -4298,9 +4619,25 @@ ${relief}
       record(paint.histories), "笔刷状态无效");
     Object.entries(paint.histories).forEach(([id, entries]) => {
       ensure(id === "single" || ids.includes(id), "未知笔画图层");
-      ensure(Array.isArray(entries) && entries.length <= 40 &&
-        entries.every(cells => cellArray(cells, id === "single" ? s.paint.cells.length : f.paint.cells.length)),
-      "撤销历史无效");
+      ensure(Array.isArray(entries) && entries.length <= 40, "撤销历史无效");
+      const map = id === "single" ? s.paint : f.paint;
+      entries.forEach(data => {
+        if (!record(data) || !Object.hasOwn(data, "changes")) {
+          validateGrid(data, map.width, map.height);
+          return;
+        }
+        ensure(Array.isArray(data.changes) && data.changes.length <= 1048576, "笔画差量无效");
+        const seen = new Set();
+        data.changes.forEach(change => {
+          ensure(Array.isArray(change) && change.length === 3 &&
+            change.slice(0, 2).every(value => Number.isSafeInteger(value) &&
+              Math.abs(value) < Number.MAX_SAFE_INTEGER - 32) &&
+            (change[2] === 0 || change[2] === 1), "笔画差量无效");
+          const key = `${change[0]},${change[1]}`;
+          ensure(!seen.has(key), "笔画差量重复");
+          seen.add(key);
+        });
+      });
     });
     ensure(Array.isArray(data.panes) && data.panes.length >= 1 && data.panes.length <= 5, "检查栏数量无效");
     data.panes.forEach(pane => {
@@ -4346,11 +4683,11 @@ ${relief}
     }
     function mapData(map) {
       return { width: map.width, height: map.height, title: map.title, tag: map.tag,
-        description: map.description, cells: Array.from(map.cells) };
+        description: map.description, ...Lab.gridData(map) };
     }
     function mapFrom(data) {
       const map = Lab.map(data.width, data.height, data.title, data.tag, data.description);
-      map.cells.set(data.cells);
+      Lab.restoreGrid(map, data);
       return map;
     }
     function capture() {
@@ -4379,7 +4716,7 @@ ${relief}
       single, floor: { active: floor.active, id: floor.id, previewId: floor.previewId, unitSize: floor.unitSize,
         nextId: floor.nextId, roles: floor.roles.map(role => ({ ...role })), slots,
         paint: mapData(floor.paint), maps: Object.fromEntries(Object.entries(Lab.floorMaps(floor.paint, floor.roles))
-          .map(([id, map]) => [id, Array.from(map.cells)])) },
+          .map(([id, map]) => [id, Lab.gridData(map)])) },
       workspace: { ...app.workspaceState.capture(), collapsedLayers: app.layerCardsState.capture() },
       paint: app.paintState.capture(), panes: app.previewState.capture(),
       views: { template: $("template-canvas").labViewport.snapshot(), paint: $("paint-canvas").labViewport.snapshot() },
@@ -4404,7 +4741,7 @@ ${relief}
       Object.assign(floor, data.floor, { single, slots, paint: mapFrom(data.floor.paint) });
       app.layerCardsState.restore(data.workspace.collapsedLayers || []);
       const maps = Lab.floorMaps(floor.paint, floor.roles);
-      Object.entries(data.floor.maps).forEach(([id, cells]) => maps[id].cells.set(cells));
+      Object.entries(data.floor.maps).forEach(([id, data]) => Lab.restoreGrid(maps[id], data));
       app.restoreLayerState(floor.active ? slots[floor.id] : single);
       $("workflow").value = floor.active ? "floor" : "single";
       $("corners").setAttribute("aria-pressed", String(state.corners));
@@ -5047,12 +5384,15 @@ ${relief}
     if (!app.sceneValid()) return;
     const canvas = Lab.canvas(1, 1);
     const size = app.floor.active ? app.floor.unitSize : state.slice.size;
-    const projection = Lab.projection(map.width, map.height, size, $("view").value);
-    if (projection.width * projection.height > 16777216) {
-      app.notify("原生场景导出超过16777216像素，请使用较小模板或原生图集尺寸；不会自动缩小作品。");
+    const bounds = map.chunks ? Lab.sparseExportBounds(map, app.floor.active ? app.floor.slots : null,
+      { roles: app.floor.roles, solo: Boolean(app.floor.previewId), activeLayer: app.floor.previewId || app.floor.id }) : null;
+    const projection = Lab.projection(bounds ? bounds.x1 - bounds.x0 : map.width,
+      bounds ? bounds.y1 - bounds.y0 : map.height, size, $("view").value);
+    if (projection.width * projection.height > 16777216 || projection.width > 32767 || projection.height > 32767) {
+      app.notify("作品范围超过PNG导出上限（16777216像素／单边32767px）；请用完整备份保留全部坐标与笔画。");
       return;
     }
-    app.drawScene(canvas, map, { size,
+    app.drawScene(canvas, map, { size, bounds,
       grid: false, dual: false, logic: false, selected: null });
     Lab.downloadCanvas(canvas, name, app.notify);
     app.notify("已请求导出当前预览PNG，遵循图层显隐与固定层预览；未包含检查网格、高亮或页面背景。");
@@ -5113,6 +5453,7 @@ ${relief}
     $("paint-export").disabled = !app.sceneValid();
     const canvas = $("paint-canvas");
     if (!app.sceneValid()) {
+      canvas.labViewport.suspendInfinite();
       canvas.width = canvas.height = 1;
       canvas.style.width = canvas.style.height = "1px";
       canvas.labViewport.update();
